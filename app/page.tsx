@@ -11,6 +11,8 @@ type Task = {
   title: string;
   projectId: string;
   due: string;
+  dueDate?: string;
+  dueTime?: string;
   status: TaskStatus;
   priority: Priority;
   estimate: number;
@@ -28,7 +30,6 @@ type Project = {
   progress: number;
   updatedAt: string;
   nextAction: string;
-  blocker: string;
   log: string[];
 };
 
@@ -61,7 +62,6 @@ const starterData: WorkbenchData = {
       progress: 0,
       updatedAt: "今天",
       nextAction: "把任务分配到具体项目",
-      blocker: "无",
       log: ["今天 · 用于收纳未归类任务"],
     },
     {
@@ -73,7 +73,6 @@ const starterData: WorkbenchData = {
       progress: 78,
       updatedAt: "今天",
       nextAction: "完成方案第 3 版",
-      blocker: "等待明天评审反馈",
       log: ["今天 · 安排 90 分钟深度工作", "7/12 · 完成竞品对比", "7/11 · 收到客户补充需求"],
     },
     {
@@ -85,7 +84,6 @@ const starterData: WorkbenchData = {
       progress: 62,
       updatedAt: "5 天前",
       nextAction: "联系中介确认材料清单",
-      blocker: "中介清单未回复",
       log: ["今天 · 建议跟进中介清单", "7/10 · 记录照片规格待确认", "7/08 · 护照复印件已准备"],
     },
     {
@@ -97,7 +95,6 @@ const starterData: WorkbenchData = {
       progress: 34,
       updatedAt: "7 天前",
       nextAction: "阅读第 4 章 25 分钟",
-      blocker: "没有固定时间块",
       log: ["今天 · 建议生成 25 分钟任务", "7/06 · 完成第 3 章", "7/01 · 新增课程笔记"],
     },
     {
@@ -109,7 +106,6 @@ const starterData: WorkbenchData = {
       progress: 48,
       updatedAt: "昨天",
       nextAction: "预约周五体检",
-      blocker: "无",
       log: ["昨天 · 整理保险资料", "7/09 · 记录体检可选时间"],
     },
   ],
@@ -119,6 +115,8 @@ const starterData: WorkbenchData = {
       title: "客户方案第 3 版",
       projectId: "client",
       due: "今天 12:00",
+      dueDate: todayLabel,
+      dueTime: "12:00",
       status: "doing",
       priority: "high",
       estimate: 90,
@@ -130,6 +128,7 @@ const starterData: WorkbenchData = {
       title: "联系中介确认材料清单",
       projectId: "visa",
       due: "今天",
+      dueDate: todayLabel,
       status: "todo",
       priority: "medium",
       estimate: 20,
@@ -141,6 +140,7 @@ const starterData: WorkbenchData = {
       title: "整理照片规格和护照复印件",
       projectId: "visa",
       due: "周三",
+      dueDate: "2026-07-15",
       status: "todo",
       priority: "medium",
       estimate: 35,
@@ -152,6 +152,7 @@ const starterData: WorkbenchData = {
       title: "阅读产品课程第 4 章",
       projectId: "learn",
       due: "本周",
+      dueDate: "2026-07-17",
       status: "todo",
       priority: "low",
       estimate: 25,
@@ -203,18 +204,38 @@ function normalizeData(data: WorkbenchData): WorkbenchData {
     tasks: data.tasks.map((task) => ({
       ...task,
       projectId: projectIds.has(task.projectId) ? task.projectId : inboxProjectId,
+      dueDate: task.dueDate ?? inferDueDate(task.due),
+      dueTime: task.dueTime ?? inferDueTime(task.due),
+      note: task.note ?? "",
       deletedAt: task.deletedAt,
     })),
   };
 }
 
-function inferDue(text: string) {
+function inferDueLabel(text: string) {
   if (text.includes("今天")) return "今天";
   if (text.includes("明天")) return "明天";
   if (text.includes("周三") || text.includes("星期三")) return "周三";
   if (text.includes("周五") || text.includes("星期五")) return "周五";
   if (text.includes("本周")) return "本周";
   return "未定";
+}
+
+function inferDueDate(text: string) {
+  if (text.includes("今天")) return todayLabel;
+  if (text.includes("明天")) return "2026-07-14";
+  if (text.includes("周三") || text.includes("星期三")) return "2026-07-15";
+  if (text.includes("周五") || text.includes("星期五") || text.includes("本周")) return "2026-07-17";
+  return "";
+}
+
+function inferDueTime(text: string) {
+  return text.match(/([01]?\d|2[0-3]):([0-5]\d)/)?.[0] ?? "";
+}
+
+function formatDue(task: Task) {
+  const date = task.dueDate || task.due || "未定";
+  return task.dueTime ? `${date} ${task.dueTime}` : date;
 }
 
 function inferPriority(text: string): Priority {
@@ -233,8 +254,10 @@ export default function Home() {
   const [projectName, setProjectName] = useState("");
   const [projectGoal, setProjectGoal] = useState("");
   const [newTaskTitle, setNewTaskTitle] = useState("");
-  const [newTaskDue, setNewTaskDue] = useState("今天");
+  const [newTaskDueDate, setNewTaskDueDate] = useState(todayLabel);
+  const [newTaskDueTime, setNewTaskDueTime] = useState("");
   const [newTaskPriority, setNewTaskPriority] = useState<Priority>("medium");
+  const [newTaskNote, setNewTaskNote] = useState("");
   const [planApplied, setPlanApplied] = useState(false);
 
   useEffect(() => {
@@ -376,7 +399,9 @@ export default function Home() {
       projectsById[inboxProjectId] ??
       data.projects[0];
 
-    const due = inferDue(trimmed);
+    const due = inferDueLabel(trimmed);
+    const dueDate = inferDueDate(trimmed);
+    const dueTime = inferDueTime(trimmed);
     const priority = inferPriority(trimmed);
     const pieces = trimmed
       .split(/[，,。；;]/)
@@ -388,6 +413,8 @@ export default function Home() {
       title: piece.replace(/^今天先/, "").replace(/^先/, ""),
       projectId: matchedProject.id,
       due,
+      dueDate,
+      dueTime,
       status: "todo" as TaskStatus,
       priority,
       estimate: piece.length > 14 ? 35 : 20,
@@ -427,7 +454,6 @@ export default function Home() {
       progress: 8,
       updatedAt: "刚刚",
       nextAction: "写下第一个可执行动作",
-      blocker: "无",
       log: ["刚刚 · 新建项目"],
     };
     setData((current) => {
@@ -457,11 +483,13 @@ export default function Home() {
       id: makeId("task"),
       title,
       projectId: selectedProject.id,
-      due: newTaskDue.trim() || "未定",
+      due: newTaskDueDate || "未定",
+      dueDate: newTaskDueDate,
+      dueTime: newTaskDueTime,
       status: "todo",
       priority: newTaskPriority,
       estimate: 25,
-      note: "项目内新增",
+      note: newTaskNote.trim(),
       createdAt: todayLabel,
     };
 
@@ -480,8 +508,10 @@ export default function Home() {
       ),
     }));
     setNewTaskTitle("");
-    setNewTaskDue("今天");
+    setNewTaskDueDate(todayLabel);
+    setNewTaskDueTime("");
     setNewTaskPriority("medium");
+    setNewTaskNote("");
   }
 
   function applyPlan() {
@@ -545,35 +575,43 @@ export default function Home() {
             </button>
           ))}
         </nav>
-        <form className="new-project" onSubmit={addProject}>
-          <label>
-            新项目
-            <input value={projectName} onChange={(event) => setProjectName(event.target.value)} placeholder="例如：搬家计划" />
-          </label>
-          <label>
-            目标
-            <input value={projectGoal} onChange={(event) => setProjectGoal(event.target.value)} placeholder="先写一句目标" />
-          </label>
-          <button type="submit">添加项目</button>
-        </form>
       </aside>
 
       <section className="content">
-        <header className="hero">
-          <div>
-            <p>{isTrashView ? "维护" : "2026-07-13 周一"}</p>
-            <h1>{isTrashView ? "回收站" : "今天把哪些事推进一点点？"}</h1>
-            <span className={`save-state ${saveState}`}>{dataReady ? saveStateLabels[saveState] : "正在读取挂载数据文件"}</span>
+        {isTrashView ? (
+          <div className="dashboard-grid">
+            <section className="panel wide">
+              <div className="panel-head">
+                <h2>回收站</h2>
+                <span>{trashedTasks.length} 个已删除 Todo · {dataReady ? saveStateLabels[saveState] : "正在读取挂载数据文件"}</span>
+              </div>
+              <div className="task-list">
+                {trashedTasks.map((task) => (
+                  <TrashTaskRow
+                    key={task.id}
+                    task={task}
+                    projectsById={projectsById}
+                    onRestore={restoreTask}
+                    onPermanentDelete={permanentlyDeleteTask}
+                  />
+                ))}
+                {!trashedTasks.length && <p className="empty-state">回收站是空的。</p>}
+              </div>
+            </section>
           </div>
-          {!isTrashView && (
+        ) : (
+          <>
+            <header className="hero">
+              <div>
+                <p>2026-07-13 周一</p>
+                <h1>今天把哪些事推进一点点？</h1>
+                <span className={`save-state ${saveState}`}>{dataReady ? saveStateLabels[saveState] : "正在读取挂载数据文件"}</span>
+              </div>
             <button className="secondary" type="button" onClick={resetDemo}>
               重置演示数据
             </button>
-          )}
-        </header>
+            </header>
 
-        {!isTrashView && (
-          <>
             <form className="capture" onSubmit={handleCapture}>
               <label>
                 快速记录
@@ -688,6 +726,17 @@ export default function Home() {
                 <h2>项目看板</h2>
                 <span>{realProjects.length} 个项目 · {inboxTasks.length} 个未归类</span>
               </div>
+              <form className="project-composer" onSubmit={addProject}>
+                <label>
+                  新项目
+                  <input value={projectName} onChange={(event) => setProjectName(event.target.value)} placeholder="例如：搬家计划" />
+                </label>
+                <label>
+                  目标
+                  <input value={projectGoal} onChange={(event) => setProjectGoal(event.target.value)} placeholder="先写一句目标" />
+                </label>
+                <button type="submit">添加项目</button>
+              </form>
               <div className="project-list">
                 {visibleProjects.map((project) => {
                   const activeCount = activeTasksForProject(project.id).length;
@@ -726,10 +775,6 @@ export default function Home() {
                 <span>下一步</span>
                 <strong>{selectedNextTask?.title ?? "先添加一个 Todo"}</strong>
               </div>
-              <label>
-                阻塞点
-                <input value={selectedProject.blocker} onChange={(event) => updateProject(selectedProject.id, { blocker: event.target.value, updatedAt: "刚刚" })} />
-              </label>
               <div className="progress-track" aria-label="项目进度">
                 <span style={{ width: `${selectedProgress}%` }} />
               </div>
@@ -746,8 +791,12 @@ export default function Home() {
                   <input value={newTaskTitle} onChange={(event) => setNewTaskTitle(event.target.value)} placeholder="写下一个可执行动作" />
                 </label>
                 <label>
-                  截止
-                  <input value={newTaskDue} onChange={(event) => setNewTaskDue(event.target.value)} placeholder="今天 / 周五 / 未定" />
+                  截止日期
+                  <input type="date" value={newTaskDueDate} onChange={(event) => setNewTaskDueDate(event.target.value)} />
+                </label>
+                <label>
+                  时间
+                  <input type="time" value={newTaskDueTime} onChange={(event) => setNewTaskDueTime(event.target.value)} />
                 </label>
                 <label>
                   优先级
@@ -758,6 +807,10 @@ export default function Home() {
                       </option>
                     ))}
                   </select>
+                </label>
+                <label>
+                  备注
+                  <input value={newTaskNote} onChange={(event) => setNewTaskNote(event.target.value)} placeholder="可选" />
                 </label>
                 <button type="submit">添加</button>
               </form>
@@ -812,29 +865,6 @@ export default function Home() {
           </div>
         )}
 
-        {view === "trash" && (
-          <div className="dashboard-grid">
-            <section className="panel wide">
-              <div className="panel-head">
-                <h2>回收站</h2>
-                <span>{trashedTasks.length} 个已删除 Todo</span>
-              </div>
-              <div className="task-list">
-                {trashedTasks.map((task) => (
-                  <TrashTaskRow
-                    key={task.id}
-                    task={task}
-                    projectsById={projectsById}
-                    onRestore={restoreTask}
-                    onPermanentDelete={permanentlyDeleteTask}
-                  />
-                ))}
-                {!trashedTasks.length && <p className="empty-state">回收站是空的。</p>}
-              </div>
-            </section>
-          </div>
-        )}
-
       </section>
     </main>
   );
@@ -873,8 +903,12 @@ function TaskRow({
         <strong>{task.title}</strong>
         <p>
           {showProject ? `${projectsById[task.projectId]?.name ?? "Inbox / 未归类"} · ` : ""}
-          {task.due} · {task.estimate} 分钟
+          {formatDue(task)} · {task.estimate} 分钟
         </p>
+        <label className="task-note">
+          备注
+          <input value={task.note ?? ""} onChange={(event) => onUpdate(task.id, { note: event.target.value })} placeholder="补充一点上下文" />
+        </label>
       </div>
       <div className="task-actions">
         <select value={task.projectId} onChange={(event) => onUpdate(task.id, { projectId: event.target.value })} aria-label="所属项目">
@@ -884,6 +918,8 @@ function TaskRow({
             </option>
           ))}
         </select>
+        <input type="date" value={task.dueDate ?? ""} onChange={(event) => onUpdate(task.id, { dueDate: event.target.value, due: event.target.value || "未定" })} aria-label="截止日期" />
+        <input type="time" value={task.dueTime ?? ""} onChange={(event) => onUpdate(task.id, { dueTime: event.target.value })} aria-label="截止时间" />
         <select value={task.status} onChange={(event) => onUpdate(task.id, { status: event.target.value as TaskStatus })} aria-label="任务状态">
           {Object.entries(statusLabels).map(([key, label]) => (
             <option key={key} value={key}>
