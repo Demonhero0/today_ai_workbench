@@ -1,7 +1,6 @@
 # AI Personal Workbench
 
-A local-first personal workbench for schedules, tasks, parallel project tracking,
-and lightweight review.
+A local-first personal workbench for tasks and parallel project tracking.
 
 The app is intended to run in Docker. The image provides the Node runtime and
 the built AI workbench app. Personal workbench data is not baked into the image:

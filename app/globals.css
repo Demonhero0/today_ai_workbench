@@ -509,46 +509,6 @@ label {
   background: var(--accent);
 }
 
-.chart-panel {
-  min-height: 320px;
-}
-
-.trend svg {
-  width: 100%;
-  height: auto;
-}
-
-.trend path {
-  fill: none;
-  stroke: var(--line);
-  stroke-width: 1.5;
-}
-
-.trend .gridline {
-  stroke-width: 1;
-}
-
-.trend .line {
-  stroke-width: 4;
-}
-
-.trend .complete {
-  stroke: var(--accent);
-}
-
-.trend .wait {
-  stroke: var(--gold);
-}
-
-.trend .stuck {
-  stroke: var(--red);
-}
-
-.trend text {
-  fill: var(--foreground);
-  font-size: 14px;
-}
-
 @media (max-width: 980px) {
   .workbench {
     grid-template-columns: 1fr;

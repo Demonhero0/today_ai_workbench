@@ -4,7 +4,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 
 type TaskStatus = "todo" | "doing" | "waiting" | "done";
 type Priority = "high" | "medium" | "low";
-type View = "today" | "projects" | "review";
+type View = "today" | "projects";
 
 type Task = {
   id: string;
@@ -269,7 +269,7 @@ export default function Home() {
       : "今天没有高优先级任务，可以安排一段维护性整理。",
     waitingProjects.length
       ? `${waitingProjects[0].name} 处于${waitingProjects[0].phase}，建议推进下一步：${waitingProjects[0].nextAction}。`
-      : "所有项目都有近期进展，适合做一次轻量复盘。",
+      : "所有项目都有近期进展，适合补齐下一步动作和截止时间。",
     "15:00-16:30 是今天最长空档，适合放 60 分钟以上的深度任务。",
   ];
 
@@ -417,7 +417,6 @@ export default function Home() {
           {[
             ["today", "今日"],
             ["projects", "项目"],
-            ["review", "复盘"],
           ].map(([key, label]) => (
             <button key={key} className={view === key ? "active" : ""} type="button" onClick={() => setView(key as View)}>
               {label}
@@ -634,39 +633,6 @@ export default function Home() {
           </div>
         )}
 
-        {view === "review" && (
-          <div className="dashboard-grid">
-            <section className="panel">
-              <div className="panel-head">
-                <h2>周复盘摘要</h2>
-                <span>自动生成草稿</span>
-              </div>
-              <ol className="suggestions">
-                <li>客户项目推进最快，已完成 {data.tasks.filter((task) => task.projectId === "client" && task.status === "done").length} 个关键动作。</li>
-                <li>签证办理的主要风险是等待外部回复，建议把可做事项和等待事项拆开。</li>
-                <li>学习项目适合改成每天 25 分钟，不要继续用大块目标压自己。</li>
-              </ol>
-            </section>
-            <section className="panel chart-panel">
-              <div className="panel-head">
-                <h2>事项走势</h2>
-                <span>完成 / 等待 / 停滞</span>
-              </div>
-              <div className="trend" aria-label="事项走势示意图">
-                <svg viewBox="0 0 520 220" role="img">
-                  <path d="M52 24V184H492" />
-                  <path d="M52 144H492M52 104H492M52 64H492" className="gridline" />
-                  <path d="M52 160L125 148L198 132L271 112L344 96L417 78L492 62" className="line complete" />
-                  <path d="M52 86L125 92L198 88L271 96L344 94L417 90L492 86" className="line wait" />
-                  <path d="M52 72L125 78L198 96L271 118L344 128L417 142L492 156" className="line stuck" />
-                  <text x="390" y="58">完成增加</text>
-                  <text x="390" y="86">等待持平</text>
-                  <text x="390" y="156">停滞下降</text>
-                </svg>
-              </div>
-            </section>
-          </div>
-        )}
       </section>
     </main>
   );
