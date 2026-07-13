@@ -46,10 +46,23 @@ type WorkbenchData = {
   events: CalendarEvent[];
 };
 
+const inboxProjectId = "inbox";
 const todayLabel = "2026-07-13";
 
 const starterData: WorkbenchData = {
   projects: [
+    {
+      id: inboxProjectId,
+      name: "Inbox / 未归类",
+      goal: "临时收纳还没有项目归属的任务",
+      phase: "收件箱",
+      status: "active",
+      progress: 0,
+      updatedAt: "今天",
+      nextAction: "把任务分配到具体项目",
+      blocker: "无",
+      log: ["今天 · 用于收纳未归类任务"],
+    },
     {
       id: "client",
       name: "客户项目",
@@ -176,6 +189,23 @@ function makeId(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
+function normalizeData(data: WorkbenchData): WorkbenchData {
+  const hasInbox = data.projects.some((project) => project.id === inboxProjectId);
+  const projects = hasInbox ? data.projects : [starterData.projects[0], ...data.projects];
+  const projectIds = new Set(projects.map((project) => project.id));
+  return {
+    projects,
+    events: data.events.map((event) => ({
+      ...event,
+      projectId: projectIds.has(event.projectId) ? event.projectId : inboxProjectId,
+    })),
+    tasks: data.tasks.map((task) => ({
+      ...task,
+      projectId: projectIds.has(task.projectId) ? task.projectId : inboxProjectId,
+    })),
+  };
+}
+
 function inferDue(text: string) {
   if (text.includes("今天")) return "今天";
   if (text.includes("明天")) return "明天";
@@ -191,19 +221,18 @@ function inferPriority(text: string): Priority {
   return "low";
 }
 
-function clampProgress(value: number) {
-  return Math.max(0, Math.min(100, value));
-}
-
 export default function Home() {
-  const [data, setData] = useState<WorkbenchData>(starterData);
+  const [data, setData] = useState<WorkbenchData>(normalizeData(starterData));
   const [dataReady, setDataReady] = useState(false);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [view, setView] = useState<View>("today");
-  const [selectedProjectId, setSelectedProjectId] = useState("visa");
+  const [selectedProjectId, setSelectedProjectId] = useState("client");
   const [capture, setCapture] = useState("周三前整理签证材料，今天先问中介清单");
   const [projectName, setProjectName] = useState("");
   const [projectGoal, setProjectGoal] = useState("");
+  const [newTaskTitle, setNewTaskTitle] = useState("");
+  const [newTaskDue, setNewTaskDue] = useState("今天");
+  const [newTaskPriority, setNewTaskPriority] = useState<Priority>("medium");
   const [planApplied, setPlanApplied] = useState(false);
 
   useEffect(() => {
@@ -215,8 +244,9 @@ export default function Home() {
         if (!response.ok) throw new Error("Unable to load data");
         const payload = (await response.json()) as { data?: WorkbenchData | null };
         if (!cancelled && payload.data) {
-          setData(payload.data);
-          setSelectedProjectId(payload.data.projects[0]?.id ?? "visa");
+          const normalized = normalizeData(payload.data);
+          setData(normalized);
+          setSelectedProjectId(normalized.projects.find((project) => project.id !== inboxProjectId)?.id ?? inboxProjectId);
         }
       } catch {
         if (!cancelled) setSaveState("error");
@@ -257,20 +287,50 @@ export default function Home() {
   }, [data.projects]);
 
   const selectedProject = projectsById[selectedProjectId] ?? data.projects[0];
+  const visibleProjects = data.projects;
+  const realProjects = data.projects.filter((project) => project.id !== inboxProjectId);
 
   const activeTasks = data.tasks.filter((task) => task.status !== "done");
   const highPriorityTasks = activeTasks.filter((task) => task.priority === "high");
-  const waitingProjects = data.projects.filter((project) => project.status === "waiting" || project.status === "slow");
+  const waitingProjects = realProjects.filter((project) => project.status === "waiting" || project.status === "slow");
   const doneTasks = data.tasks.filter((task) => task.status === "done");
+  const inboxTasks = activeTasks.filter((task) => task.projectId === inboxProjectId);
+
+  function tasksForProject(projectId: string) {
+    return data.tasks.filter((task) => task.projectId === projectId);
+  }
+
+  function activeTasksForProject(projectId: string) {
+    return tasksForProject(projectId).filter((task) => task.status !== "done");
+  }
+
+  function progressForProject(projectId: string) {
+    const tasks = tasksForProject(projectId);
+    if (!tasks.length) return 0;
+    return Math.round((tasks.filter((task) => task.status === "done").length / tasks.length) * 100);
+  }
+
+  function nextTaskForProject(projectId: string) {
+    const priorityWeight: Record<Priority, number> = { high: 0, medium: 1, low: 2 };
+    return activeTasksForProject(projectId).sort((a, b) => priorityWeight[a.priority] - priorityWeight[b.priority])[0];
+  }
+
+  const selectedProjectTasks = selectedProject ? tasksForProject(selectedProject.id) : [];
+  const selectedActiveTasks = selectedProjectTasks.filter((task) => task.status !== "done");
+  const selectedDoneTasks = selectedProjectTasks.filter((task) => task.status === "done");
+  const selectedProgress = selectedProject ? progressForProject(selectedProject.id) : 0;
+  const selectedNextTask = selectedProject ? nextTaskForProject(selectedProject.id) : undefined;
 
   const suggestions = [
     highPriorityTasks.length
       ? `优先处理 ${highPriorityTasks[0].title}，它是当前最高风险动作。`
       : "今天没有高优先级任务，可以安排一段维护性整理。",
     waitingProjects.length
-      ? `${waitingProjects[0].name} 处于${waitingProjects[0].phase}，建议推进下一步：${waitingProjects[0].nextAction}。`
+      ? `${waitingProjects[0].name} 处于${waitingProjects[0].phase}，建议推进下一步：${nextTaskForProject(waitingProjects[0].id)?.title ?? "补一个可执行 Todo"}。`
       : "所有项目都有近期进展，适合补齐下一步动作和截止时间。",
-    "15:00-16:30 是今天最长空档，适合放 60 分钟以上的深度任务。",
+    inboxTasks.length
+      ? `Inbox 里还有 ${inboxTasks.length} 个未归类任务，建议先分配到具体项目。`
+      : "15:00-16:30 是今天最长空档，适合放 60 分钟以上的深度任务。",
   ];
 
   function updateTask(taskId: string, patch: Partial<Task>) {
@@ -295,6 +355,7 @@ export default function Home() {
     const matchedProject =
       data.projects.find((project) => trimmed.includes(project.name.replace("办理", ""))) ??
       data.projects.find((project) => trimmed.includes(project.name.slice(0, 2))) ??
+      projectsById[inboxProjectId] ??
       data.projects[0];
 
     const due = inferDue(trimmed);
@@ -351,7 +412,11 @@ export default function Home() {
       blocker: "无",
       log: ["刚刚 · 新建项目"],
     };
-    setData((current) => ({ ...current, projects: [project, ...current.projects] }));
+    setData((current) => {
+      const inbox = current.projects.find((item) => item.id === inboxProjectId);
+      const rest = current.projects.filter((item) => item.id !== inboxProjectId);
+      return { ...current, projects: inbox ? [inbox, project, ...rest] : [project, ...rest] };
+    });
     setProjectName("");
     setProjectGoal("");
     setSelectedProjectId(id);
@@ -363,6 +428,42 @@ export default function Home() {
       ...current,
       projects: current.projects.map((project) => (project.id === projectId ? { ...project, ...patch } : project)),
     }));
+  }
+
+  function addTaskToProject(event: FormEvent) {
+    event.preventDefault();
+    const title = newTaskTitle.trim();
+    if (!title || !selectedProject) return;
+
+    const task: Task = {
+      id: makeId("task"),
+      title,
+      projectId: selectedProject.id,
+      due: newTaskDue.trim() || "未定",
+      status: "todo",
+      priority: newTaskPriority,
+      estimate: 25,
+      note: "项目内新增",
+      createdAt: todayLabel,
+    };
+
+    setData((current) => ({
+      ...current,
+      tasks: [task, ...current.tasks],
+      projects: current.projects.map((project) =>
+        project.id === selectedProject.id
+          ? {
+              ...project,
+              updatedAt: "刚刚",
+              nextAction: task.title,
+              log: [`刚刚 · 新增任务：${task.title}`, ...project.log].slice(0, 5),
+            }
+          : project,
+      ),
+    }));
+    setNewTaskTitle("");
+    setNewTaskDue("今天");
+    setNewTaskPriority("medium");
   }
 
   function applyPlan() {
@@ -386,12 +487,12 @@ export default function Home() {
   }
 
   function resetDemo() {
-    setData(starterData);
-    setSelectedProjectId("visa");
+    setData(normalizeData(starterData));
+    setSelectedProjectId("client");
     setPlanApplied(false);
   }
 
-  const heatRows = data.projects.slice(0, 4).map((project, index) => {
+  const heatRows = realProjects.slice(0, 4).map((project, index) => {
     const projectTasks = data.tasks.filter((task) => task.projectId === project.id && task.status !== "done");
     return {
       name: project.name.slice(0, 4),
@@ -458,8 +559,8 @@ export default function Home() {
 
         <section className="stats" aria-label="今日概览">
           <Metric label="今日待办" value={activeTasks.length.toString()} hint={`${highPriorityTasks.length} 个高优先级`} />
-          <Metric label="并行事项" value={data.projects.length.toString()} hint={`${waitingProjects.length} 个需要关注`} />
-          <Metric label="最长空档" value="90m" hint="15:00-16:30" />
+          <Metric label="项目" value={realProjects.length.toString()} hint={`${waitingProjects.length} 个需要关注`} />
+          <Metric label="Inbox" value={inboxTasks.length.toString()} hint="未归类任务" />
           <Metric label="已完成" value={doneTasks.length.toString()} hint="今日沉淀进展" />
         </section>
 
@@ -487,27 +588,15 @@ export default function Home() {
               </div>
               <div className="task-list">
                 {data.tasks.map((task) => (
-                  <article className={`task ${task.status === "done" ? "done" : ""}`} key={task.id}>
-                    <div>
-                      <strong>{task.title}</strong>
-                      <p>
-                        {projectsById[task.projectId]?.name ?? "未归类"} · {task.due} · {task.estimate} 分钟
-                      </p>
-                    </div>
-                    <div className="task-actions">
-                      <select value={task.status} onChange={(event) => updateTask(task.id, { status: event.target.value as TaskStatus })} aria-label="任务状态">
-                        {Object.entries(statusLabels).map(([key, label]) => (
-                          <option key={key} value={key}>
-                            {label}
-                          </option>
-                        ))}
-                      </select>
-                      <span className={`pill ${task.priority}`}>{priorityLabels[task.priority]}</span>
-                      <button className="icon-button" type="button" onClick={() => deleteTask(task.id)} aria-label={`删除 ${task.title}`}>
-                        ×
-                      </button>
-                    </div>
-                  </article>
+                  <TaskRow
+                    key={task.id}
+                    task={task}
+                    projects={visibleProjects}
+                    projectsById={projectsById}
+                    onDelete={deleteTask}
+                    onUpdate={updateTask}
+                    showProject
+                  />
                 ))}
               </div>
             </section>
@@ -569,54 +658,114 @@ export default function Home() {
             <section className="panel">
               <div className="panel-head">
                 <h2>项目看板</h2>
-                <span>{data.projects.length} 个事项</span>
+                <span>{realProjects.length} 个项目 · {inboxTasks.length} 个未归类</span>
               </div>
               <div className="project-list">
-                {data.projects.map((project) => (
-                  <button
-                    className={`project-card ${selectedProject.id === project.id ? "selected" : ""}`}
-                    key={project.id}
-                    type="button"
-                    onClick={() => setSelectedProjectId(project.id)}
-                  >
-                    <span>
-                      <strong>{project.name}</strong>
-                      <small>{project.phase} · {project.updatedAt}</small>
-                    </span>
-                    <em>{project.progress}%</em>
-                    <i style={{ width: `${project.progress}%` }} />
-                  </button>
-                ))}
+                {visibleProjects.map((project) => {
+                  const activeCount = activeTasksForProject(project.id).length;
+                  const progress = progressForProject(project.id);
+                  const nextTask = nextTaskForProject(project.id);
+                  return (
+                    <button
+                      className={`project-card ${selectedProject.id === project.id ? "selected" : ""} ${project.id === inboxProjectId ? "inbox" : ""}`}
+                      key={project.id}
+                      type="button"
+                      onClick={() => setSelectedProjectId(project.id)}
+                    >
+                      <span>
+                        <strong>{project.name}</strong>
+                        <small>{project.phase} · {activeCount} 个未完成</small>
+                        <small>下一步：{nextTask?.title ?? "暂无"}</small>
+                      </span>
+                      <em>{progress}%</em>
+                      <i style={{ width: `${progress}%` }} />
+                    </button>
+                  );
+                })}
               </div>
             </section>
 
             <section className="panel">
               <div className="panel-head">
                 <h2>{selectedProject.name}</h2>
-                <span>{selectedProject.phase}</span>
+                <span>{selectedActiveTasks.length} 个未完成 · {selectedProgress}%</span>
               </div>
               <label>
                 目标
                 <input value={selectedProject.goal} onChange={(event) => updateProject(selectedProject.id, { goal: event.target.value, updatedAt: "刚刚" })} />
               </label>
-              <label>
-                下一步动作
-                <input value={selectedProject.nextAction} onChange={(event) => updateProject(selectedProject.id, { nextAction: event.target.value, updatedAt: "刚刚" })} />
-              </label>
+              <div className="next-action">
+                <span>下一步</span>
+                <strong>{selectedNextTask?.title ?? "先添加一个 Todo"}</strong>
+              </div>
               <label>
                 阻塞点
                 <input value={selectedProject.blocker} onChange={(event) => updateProject(selectedProject.id, { blocker: event.target.value, updatedAt: "刚刚" })} />
               </label>
-              <label>
-                进度 {selectedProject.progress}%
-                <input
-                  type="range"
-                  min="0"
-                  max="100"
-                  value={selectedProject.progress}
-                  onChange={(event) => updateProject(selectedProject.id, { progress: clampProgress(Number(event.target.value)), updatedAt: "刚刚" })}
-                />
-              </label>
+              <div className="progress-track" aria-label="项目进度">
+                <span style={{ width: `${selectedProgress}%` }} />
+              </div>
+            </section>
+
+            <section className="panel wide">
+              <div className="panel-head">
+                <h2>项目 Todo</h2>
+                <span>{selectedProject.name}</span>
+              </div>
+              <form className="task-composer" onSubmit={addTaskToProject}>
+                <label>
+                  新 Todo
+                  <input value={newTaskTitle} onChange={(event) => setNewTaskTitle(event.target.value)} placeholder="写下一个可执行动作" />
+                </label>
+                <label>
+                  截止
+                  <input value={newTaskDue} onChange={(event) => setNewTaskDue(event.target.value)} placeholder="今天 / 周五 / 未定" />
+                </label>
+                <label>
+                  优先级
+                  <select value={newTaskPriority} onChange={(event) => setNewTaskPriority(event.target.value as Priority)}>
+                    {Object.entries(priorityLabels).map(([key, label]) => (
+                      <option key={key} value={key}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <button type="submit">添加</button>
+              </form>
+              <div className="task-list">
+                {selectedActiveTasks.map((task) => (
+                  <TaskRow
+                    key={task.id}
+                    task={task}
+                    projects={visibleProjects}
+                    projectsById={projectsById}
+                    onDelete={deleteTask}
+                    onUpdate={updateTask}
+                  />
+                ))}
+                {!selectedActiveTasks.length && <p className="empty-state">这个项目暂时没有未完成 Todo。</p>}
+              </div>
+            </section>
+
+            <section className="panel wide">
+              <div className="panel-head">
+                <h2>已完成</h2>
+                <span>{selectedDoneTasks.length} 个</span>
+              </div>
+              <div className="task-list compact">
+                {selectedDoneTasks.map((task) => (
+                  <TaskRow
+                    key={task.id}
+                    task={task}
+                    projects={visibleProjects}
+                    projectsById={projectsById}
+                    onDelete={deleteTask}
+                    onUpdate={updateTask}
+                  />
+                ))}
+                {!selectedDoneTasks.length && <p className="empty-state">还没有完成项。</p>}
+              </div>
             </section>
 
             <section className="panel wide">
@@ -644,6 +793,54 @@ function Metric({ label, value, hint }: { label: string; value: string; hint: st
       <span>{label}</span>
       <strong>{value}</strong>
       <small>{hint}</small>
+    </article>
+  );
+}
+
+function TaskRow({
+  task,
+  projects,
+  projectsById,
+  onDelete,
+  onUpdate,
+  showProject = false,
+}: {
+  task: Task;
+  projects: Project[];
+  projectsById: Record<string, Project>;
+  onDelete: (taskId: string) => void;
+  onUpdate: (taskId: string, patch: Partial<Task>) => void;
+  showProject?: boolean;
+}) {
+  return (
+    <article className={`task ${task.status === "done" ? "done" : ""}`}>
+      <div>
+        <strong>{task.title}</strong>
+        <p>
+          {showProject ? `${projectsById[task.projectId]?.name ?? "Inbox / 未归类"} · ` : ""}
+          {task.due} · {task.estimate} 分钟
+        </p>
+      </div>
+      <div className="task-actions">
+        <select value={task.projectId} onChange={(event) => onUpdate(task.id, { projectId: event.target.value })} aria-label="所属项目">
+          {projects.map((project) => (
+            <option key={project.id} value={project.id}>
+              {project.name}
+            </option>
+          ))}
+        </select>
+        <select value={task.status} onChange={(event) => onUpdate(task.id, { status: event.target.value as TaskStatus })} aria-label="任务状态">
+          {Object.entries(statusLabels).map(([key, label]) => (
+            <option key={key} value={key}>
+              {label}
+            </option>
+          ))}
+        </select>
+        <span className={`pill ${task.priority}`}>{priorityLabels[task.priority]}</span>
+        <button className="icon-button" type="button" onClick={() => onDelete(task.id)} aria-label={`删除 ${task.title}`}>
+          ×
+        </button>
+      </div>
     </article>
   );
 }

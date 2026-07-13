@@ -331,10 +331,14 @@ label {
   display: flex;
   gap: 7px;
   align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .task-actions select {
+  width: auto;
   min-width: 92px;
+  max-width: 150px;
 }
 
 .pill {
@@ -490,6 +494,10 @@ label {
   box-shadow: inset 0 0 0 1px var(--accent);
 }
 
+.project-card.inbox {
+  background: color-mix(in srgb, var(--accent-soft) 38%, var(--panel-strong));
+}
+
 .project-card span {
   display: grid;
   gap: 4px;
@@ -509,6 +517,68 @@ label {
   background: var(--accent);
 }
 
+.next-action {
+  display: grid;
+  gap: 5px;
+  padding: 11px;
+  border-radius: 10px;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.next-action span {
+  font-size: 13px;
+}
+
+.next-action strong {
+  font-weight: 600;
+}
+
+.progress-track {
+  min-height: 8px;
+  border-radius: 999px;
+  background: #eee8dd;
+  overflow: hidden;
+}
+
+.progress-track span {
+  display: block;
+  min-height: 8px;
+  border-radius: inherit;
+  background: var(--accent);
+}
+
+.task-composer {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(120px, 0.35fr) minmax(110px, 0.28fr) auto;
+  gap: 10px;
+  align-items: end;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel-strong);
+}
+
+.task-composer button {
+  min-height: 40px;
+  border-radius: 8px;
+  padding: 0 14px;
+  background: var(--accent);
+  color: #fff;
+}
+
+.task-list.compact .task {
+  opacity: 0.74;
+}
+
+.empty-state {
+  margin: 0;
+  padding: 12px;
+  color: var(--muted);
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+}
+
 @media (max-width: 980px) {
   .workbench {
     grid-template-columns: 1fr;
@@ -519,7 +589,7 @@ label {
   }
 
   .nav {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(2, 1fr);
   }
 
   .nav button {
@@ -535,6 +605,7 @@ label {
   .hero,
   .capture,
   .task,
+  .task-composer,
   .dashboard-grid {
     grid-template-columns: 1fr;
   }
@@ -549,6 +620,11 @@ label {
 
   .task-actions {
     justify-content: space-between;
+  }
+
+  .task-actions select {
+    flex: 1 1 130px;
+    max-width: none;
   }
 }
 
