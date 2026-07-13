@@ -57,8 +57,8 @@ test("server-renders the workbench shell", async () => {
   assert.match(html, /快速记录/);
   assert.match(html, /AI 今日建议/);
   assert.match(html, /任务队列/);
+  assert.match(html, /会议/);
   assert.match(html, /回收站/);
-  assert.match(html, /会议安排/);
   assert.match(html, /本周时间轴/);
 });
 

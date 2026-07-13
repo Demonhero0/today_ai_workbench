@@ -4,7 +4,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 
 type TaskStatus = "todo" | "doing" | "waiting" | "done";
 type Priority = "high" | "medium" | "low";
-type View = "today" | "projects" | "trash";
+type View = "today" | "meetings" | "projects" | "trash";
 type EventKind = "meeting" | "focus" | "admin";
 
 type Task = {
@@ -426,6 +426,12 @@ export default function Home() {
     const loadRatio = Math.min(100, Math.round(((taskMinutes + eventLoad) / 420) * 100));
     return { date, events: dayEvents, tasks: dayTasks, taskMinutes, eventLoad, loadRatio };
   });
+  const meetingSchedule = weekDates.map((date) => ({
+    date,
+    events: data.events
+      .filter((event) => event.kind === "meeting" && eventDate(event) === date)
+      .sort((a, b) => a.startAt.localeCompare(b.startAt)),
+  }));
   const weekTaskCount = activeTasks.filter((task) => task.dueDate && weekDateSet.has(task.dueDate)).length;
   const weekMeetingCount = data.events.filter((event) => event.kind === "meeting" && weekDateSet.has(eventDate(event))).length;
 
@@ -660,6 +666,7 @@ export default function Home() {
         <nav className="nav">
           {[
             ["today", "今日"],
+            ["meetings", `会议 ${weekMeetingCount ? `(${weekMeetingCount})` : ""}`],
             ["projects", "项目"],
             ["trash", `回收站 ${trashedTasks.length ? `(${trashedTasks.length})` : ""}`],
           ].map(([key, label]) => (
@@ -758,7 +765,51 @@ export default function Home() {
 
             <section className="panel wide">
               <div className="panel-head">
-                <h2>会议安排</h2>
+                <h2>本周时间轴</h2>
+                <span>{weekTaskCount} 个 Todo · {weekMeetingCount} 个会议</span>
+              </div>
+              <div className="week-timeline">
+                {weekSchedule.map((day) => (
+                  <article className={`week-day ${day.date === todayLabel ? "today" : ""}`} key={day.date}>
+                    <header>
+                      <div>
+                        <strong>{formatWeekDay(day.date)}</strong>
+                        <small>{day.taskMinutes + day.eventLoad} 分钟负载</small>
+                      </div>
+                      <span>{day.events.length + day.tasks.length}</span>
+                    </header>
+                    <div className="load-bar" aria-label={`${day.date} 负载`}>
+                      <i style={{ width: `${day.loadRatio}%` }} />
+                    </div>
+                    <div className="week-items">
+                      {day.events.map((event) => (
+                        <button className={`week-item ${event.kind}`} key={event.id} type="button" onClick={() => setSelectedProjectId(event.projectId)}>
+                          <strong>{event.title}</strong>
+                          <span><em className="time-chip">{eventTimeRange(event)}</em> {projectsById[event.projectId]?.name ?? "Inbox / 未归类"}</span>
+                          {event.note && <small>{event.note}</small>}
+                        </button>
+                      ))}
+                      {day.tasks.map((task) => (
+                        <button className={`week-item todo ${task.priority}`} key={task.id} type="button" onClick={() => setSelectedProjectId(task.projectId)}>
+                          <strong>{task.title}</strong>
+                          <span><em className="time-chip">{task.dueTime || "未定时间"}</em> {projectsById[task.projectId]?.name ?? "Inbox / 未归类"}</span>
+                          {task.note && <small>{task.note}</small>}
+                        </button>
+                      ))}
+                      {!day.events.length && !day.tasks.length && <p className="empty-state">暂无安排</p>}
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </section>
+          </div>
+        )}
+
+        {view === "meetings" && (
+          <div className="dashboard-grid">
+            <section className="panel wide">
+              <div className="panel-head">
+                <h2>创建会议</h2>
                 <span>{weekMeetingCount} 个本周会议</span>
               </div>
               <form className="meeting-composer" onSubmit={addMeeting}>
@@ -798,38 +849,28 @@ export default function Home() {
 
             <section className="panel wide">
               <div className="panel-head">
-                <h2>本周时间轴</h2>
-                <span>{weekTaskCount} 个 Todo · {weekMeetingCount} 个会议</span>
+                <h2>本周会议时间轴</h2>
+                <span>{weekMeetingCount} 个会议</span>
               </div>
               <div className="week-timeline">
-                {weekSchedule.map((day) => (
+                {meetingSchedule.map((day) => (
                   <article className={`week-day ${day.date === todayLabel ? "today" : ""}`} key={day.date}>
                     <header>
                       <div>
                         <strong>{formatWeekDay(day.date)}</strong>
-                        <small>{day.taskMinutes + day.eventLoad} 分钟负载</small>
+                        <small>{day.events.reduce((total, event) => total + eventMinutes(event), 0)} 分钟会议</small>
                       </div>
-                      <span>{day.events.length + day.tasks.length}</span>
+                      <span>{day.events.length}</span>
                     </header>
-                    <div className="load-bar" aria-label={`${day.date} 负载`}>
-                      <i style={{ width: `${day.loadRatio}%` }} />
-                    </div>
                     <div className="week-items">
                       {day.events.map((event) => (
-                        <button className={`week-item ${event.kind}`} key={event.id} type="button" onClick={() => setSelectedProjectId(event.projectId)}>
+                        <button className="week-item meeting" key={event.id} type="button" onClick={() => setSelectedProjectId(event.projectId)}>
                           <strong>{event.title}</strong>
-                          <span>{eventTimeRange(event)} · {projectsById[event.projectId]?.name ?? "Inbox / 未归类"}</span>
+                          <span><em className="time-chip">{eventTimeRange(event)}</em> {projectsById[event.projectId]?.name ?? "Inbox / 未归类"}</span>
                           {event.note && <small>{event.note}</small>}
                         </button>
                       ))}
-                      {day.tasks.map((task) => (
-                        <button className={`week-item todo ${task.priority}`} key={task.id} type="button" onClick={() => setSelectedProjectId(task.projectId)}>
-                          <strong>{task.title}</strong>
-                          <span>{task.dueTime || "未定时间"} · {projectsById[task.projectId]?.name ?? "Inbox / 未归类"}</span>
-                          {task.note && <small>{task.note}</small>}
-                        </button>
-                      ))}
-                      {!day.events.length && !day.tasks.length && <p className="empty-state">暂无安排</p>}
+                      {!day.events.length && <p className="empty-state">暂无会议</p>}
                     </div>
                   </article>
                 ))}

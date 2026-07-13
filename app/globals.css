@@ -517,6 +517,21 @@ label {
   font-size: 12px;
 }
 
+.time-chip {
+  display: inline-grid;
+  place-items: center;
+  min-height: 22px;
+  margin-right: 6px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--foreground);
+  color: var(--panel-strong);
+  font-style: normal;
+  font-weight: 700;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+
 .week-day header span {
   display: grid;
   place-items: center;
@@ -724,7 +739,7 @@ label {
   }
 
   .nav {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(4, 1fr);
   }
 
   .nav button {
@@ -778,6 +793,10 @@ label {
 @media (max-width: 520px) {
   .stats {
     grid-template-columns: 1fr;
+  }
+
+  .nav {
+    grid-template-columns: repeat(2, 1fr);
   }
 
   .hero h1 {
