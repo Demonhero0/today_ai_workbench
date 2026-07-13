@@ -13,10 +13,8 @@ type Task = {
   projectId: string;
   due: string;
   dueDate?: string;
-  dueTime?: string;
   status: TaskStatus;
   priority: Priority;
-  estimate: number;
   note: string;
   createdAt: string;
   deletedAt?: string;
@@ -116,12 +114,10 @@ const starterData: WorkbenchData = {
       id: "t1",
       title: "客户方案第 3 版",
       projectId: "client",
-      due: "今天 12:00",
+      due: "今天",
       dueDate: todayLabel,
-      dueTime: "12:00",
       status: "doing",
       priority: "high",
-      estimate: 90,
       note: "需要先保护深度工作时段",
       createdAt: todayLabel,
     },
@@ -133,7 +129,6 @@ const starterData: WorkbenchData = {
       dueDate: todayLabel,
       status: "todo",
       priority: "medium",
-      estimate: 20,
       note: "卡住签证办理进度",
       createdAt: todayLabel,
     },
@@ -145,7 +140,6 @@ const starterData: WorkbenchData = {
       dueDate: "2026-07-15",
       status: "todo",
       priority: "medium",
-      estimate: 35,
       note: "可拆成短任务",
       createdAt: todayLabel,
     },
@@ -157,7 +151,6 @@ const starterData: WorkbenchData = {
       dueDate: "2026-07-17",
       status: "todo",
       priority: "low",
-      estimate: 25,
       note: "建议放到晚间低压时段",
       createdAt: todayLabel,
     },
@@ -181,6 +174,8 @@ const priorityLabels: Record<Priority, string> = {
   medium: "中",
   low: "低",
 };
+
+const priorityWeight: Record<Priority, number> = { high: 0, medium: 1, low: 2 };
 
 const saveStateLabels = {
   idle: "等待保存到挂载数据文件",
@@ -214,7 +209,6 @@ function normalizeData(data: WorkbenchData): WorkbenchData {
       ...task,
       projectId: projectIds.has(task.projectId) ? task.projectId : inboxProjectId,
       dueDate: task.dueDate ?? inferDueDate(task.due),
-      dueTime: task.dueTime ?? inferDueTime(task.due),
       note: task.note ?? "",
       deletedAt: task.deletedAt,
     })),
@@ -238,13 +232,8 @@ function inferDueDate(text: string) {
   return "";
 }
 
-function inferDueTime(text: string) {
-  return text.match(/([01]?\d|2[0-3]):([0-5]\d)/)?.[0] ?? "";
-}
-
 function formatDue(task: Task) {
-  const date = task.dueDate || task.due || "未定";
-  return task.dueTime ? `${date} ${task.dueTime}` : date;
+  return task.dueDate || task.due || "未定";
 }
 
 function hourNumberToTime(hour: number) {
@@ -314,7 +303,6 @@ export default function Home() {
   const [projectGoal, setProjectGoal] = useState("");
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [newTaskDueDate, setNewTaskDueDate] = useState(todayLabel);
-  const [newTaskDueTime, setNewTaskDueTime] = useState("");
   const [newTaskPriority, setNewTaskPriority] = useState<Priority>("medium");
   const [newTaskNote, setNewTaskNote] = useState("");
   const [meetingTitle, setMeetingTitle] = useState("");
@@ -403,7 +391,6 @@ export default function Home() {
   }
 
   function nextTaskForProject(projectId: string) {
-    const priorityWeight: Record<Priority, number> = { high: 0, medium: 1, low: 2 };
     return activeTasksForProject(projectId).sort((a, b) => priorityWeight[a.priority] - priorityWeight[b.priority])[0];
   }
 
@@ -420,11 +407,10 @@ export default function Home() {
       .sort((a, b) => a.startAt.localeCompare(b.startAt));
     const dayTasks = activeTasks
       .filter((task) => task.dueDate === date)
-      .sort((a, b) => (a.dueTime || "23:59").localeCompare(b.dueTime || "23:59"));
-    const taskMinutes = dayTasks.reduce((total, task) => total + task.estimate, 0);
+      .sort((a, b) => priorityWeight[a.priority] - priorityWeight[b.priority]);
     const eventLoad = dayEvents.reduce((total, event) => total + eventMinutes(event), 0);
-    const loadRatio = Math.min(100, Math.round(((taskMinutes + eventLoad) / 420) * 100));
-    return { date, events: dayEvents, tasks: dayTasks, taskMinutes, eventLoad, loadRatio };
+    const loadRatio = Math.min(100, Math.round((eventLoad / 420) * 100 + dayTasks.length * 10));
+    return { date, events: dayEvents, tasks: dayTasks, eventLoad, loadRatio };
   });
   const meetingSchedule = weekDates.map((date) => ({
     date,
@@ -444,7 +430,7 @@ export default function Home() {
       : "今天没有高优先级任务，可以安排一段维护性整理。",
     waitingProjects.length
       ? `${waitingProjects[0].name} 处于${waitingProjects[0].phase}，建议推进下一步：${nextTaskForProject(waitingProjects[0].id)?.title ?? "补一个可执行 Todo"}。`
-      : "所有项目都有近期进展，适合补齐下一步动作和截止时间。",
+      : "所有项目都有近期进展，适合补齐下一步动作和截止日期。",
     inboxTasks.length
       ? `Inbox 里还有 ${inboxTasks.length} 个未归类任务，建议先分配到具体项目。`
       : "15:00-16:30 是今天最长空档，适合放 60 分钟以上的深度任务。",
@@ -498,7 +484,6 @@ export default function Home() {
 
     const due = inferDueLabel(trimmed);
     const dueDate = inferDueDate(trimmed);
-    const dueTime = inferDueTime(trimmed);
     const priority = inferPriority(trimmed);
     const pieces = trimmed
       .split(/[，,。；;]/)
@@ -511,10 +496,8 @@ export default function Home() {
       projectId: matchedProject.id,
       due,
       dueDate,
-      dueTime,
       status: "todo" as TaskStatus,
       priority,
-      estimate: piece.length > 14 ? 35 : 20,
       note: "由快速记录整理",
       createdAt: todayLabel,
     }));
@@ -582,10 +565,8 @@ export default function Home() {
       projectId: selectedProject.id,
       due: newTaskDueDate || "未定",
       dueDate: newTaskDueDate,
-      dueTime: newTaskDueTime,
       status: "todo",
       priority: newTaskPriority,
-      estimate: 25,
       note: newTaskNote.trim(),
       createdAt: todayLabel,
     };
@@ -606,7 +587,6 @@ export default function Home() {
     }));
     setNewTaskTitle("");
     setNewTaskDueDate(todayLabel);
-    setNewTaskDueTime("");
     setNewTaskPriority("medium");
     setNewTaskNote("");
   }
@@ -645,7 +625,7 @@ export default function Home() {
           title: firstHigh.title,
           projectId: firstHigh.projectId,
           startAt: `${todayLabel}T15:00`,
-          endAt: `${todayLabel}T${hourNumberToTime(Math.min(18, 15 + firstHigh.estimate / 60))}`,
+          endAt: `${todayLabel}T16:00`,
           kind: "focus",
           note: "由 AI 今日建议加入",
         },
@@ -784,7 +764,7 @@ export default function Home() {
                     <header>
                       <div>
                         <strong>{formatWeekDay(day.date)}</strong>
-                        <small>{day.taskMinutes + day.eventLoad} 分钟负载</small>
+                        <small>{day.eventLoad} 分钟日程 · {day.tasks.length} 个 Todo</small>
                       </div>
                       <span>{day.events.length + day.tasks.length}</span>
                     </header>
@@ -802,7 +782,7 @@ export default function Home() {
                       {day.tasks.map((task) => (
                         <button className={`week-item todo ${task.priority}`} key={task.id} type="button" onClick={() => setSelectedProjectId(task.projectId)}>
                           <strong>{task.title}</strong>
-                          <span><em className="time-chip">{task.dueTime || "未定时间"}</em> {projectsById[task.projectId]?.name ?? "Inbox / 未归类"}</span>
+                          <span>Todo · {projectsById[task.projectId]?.name ?? "Inbox / 未归类"}</span>
                           {task.note && <small>{task.note}</small>}
                         </button>
                       ))}
@@ -980,10 +960,6 @@ export default function Home() {
                   <input type="date" value={newTaskDueDate} onChange={(event) => setNewTaskDueDate(event.target.value)} />
                 </label>
                 <label>
-                  时间
-                  <input type="time" value={newTaskDueTime} onChange={(event) => setNewTaskDueTime(event.target.value)} />
-                </label>
-                <label>
                   优先级
                   <select value={newTaskPriority} onChange={(event) => setNewTaskPriority(event.target.value as Priority)}>
                     {Object.entries(priorityLabels).map(([key, label]) => (
@@ -1106,7 +1082,7 @@ function TaskRow({
         <strong>{task.title}</strong>
         <p>
           {showProject ? `${projectsById[task.projectId]?.name ?? "Inbox / 未归类"} · ` : ""}
-          {formatDue(task)} · {task.estimate} 分钟
+          {formatDue(task)}
         </p>
         <label className="task-note">
           备注
@@ -1122,7 +1098,6 @@ function TaskRow({
           ))}
         </select>
         <input type="date" value={task.dueDate ?? ""} onChange={(event) => onUpdate(task.id, { dueDate: event.target.value, due: event.target.value || "未定" })} aria-label="截止日期" />
-        <input type="time" value={task.dueTime ?? ""} onChange={(event) => onUpdate(task.id, { dueTime: event.target.value })} aria-label="截止时间" />
         <select value={task.status} onChange={(event) => onUpdate(task.id, { status: event.target.value as TaskStatus })} aria-label="任务状态">
           {Object.entries(statusLabels).map(([key, label]) => (
             <option key={key} value={key}>
