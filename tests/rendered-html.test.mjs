@@ -58,8 +58,8 @@ test("server-renders the workbench shell", async () => {
   assert.match(html, /AI 今日建议/);
   assert.match(html, /任务队列/);
   assert.match(html, /回收站/);
-  assert.match(html, /今日时间轴/);
-  assert.match(html, /未来负载/);
+  assert.match(html, /会议安排/);
+  assert.match(html, /本周时间轴/);
 });
 
 test("does not keep starter preview code", async () => {

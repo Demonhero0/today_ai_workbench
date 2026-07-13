@@ -5,6 +5,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 type TaskStatus = "todo" | "doing" | "waiting" | "done";
 type Priority = "high" | "medium" | "low";
 type View = "today" | "projects" | "trash";
+type EventKind = "meeting" | "focus" | "admin";
 
 type Task = {
   id: string;
@@ -37,9 +38,10 @@ type CalendarEvent = {
   id: string;
   title: string;
   projectId: string;
-  start: number;
-  end: number;
-  kind: "meeting" | "deep" | "admin";
+  startAt: string;
+  endAt: string;
+  kind: EventKind;
+  note: string;
 };
 
 type WorkbenchData = {
@@ -161,9 +163,9 @@ const starterData: WorkbenchData = {
     },
   ],
   events: [
-    { id: "e1", title: "客户方案深度工作", projectId: "client", start: 10, end: 11.5, kind: "deep" },
-    { id: "e2", title: "项目同步", projectId: "client", start: 13, end: 14, kind: "meeting" },
-    { id: "e3", title: "签证材料处理", projectId: "visa", start: 16, end: 16.5, kind: "admin" },
+    { id: "e1", title: "客户方案深度工作", projectId: "client", startAt: `${todayLabel}T10:00`, endAt: `${todayLabel}T11:30`, kind: "focus", note: "保护一段不被打断的时间" },
+    { id: "e2", title: "项目同步", projectId: "client", startAt: `${todayLabel}T13:00`, endAt: `${todayLabel}T14:00`, kind: "meeting", note: "同步范围和风险" },
+    { id: "e3", title: "签证材料处理", projectId: "visa", startAt: "2026-07-15T16:00", endAt: "2026-07-15T16:30", kind: "admin", note: "和本周材料 Todo 放在一起看" },
   ],
 };
 
@@ -197,10 +199,17 @@ function normalizeData(data: WorkbenchData): WorkbenchData {
   const projectIds = new Set(projects.map((project) => project.id));
   return {
     projects,
-    events: data.events.map((event) => ({
-      ...event,
-      projectId: projectIds.has(event.projectId) ? event.projectId : inboxProjectId,
-    })),
+    events: data.events.map((event) => {
+      const legacyEvent = event as CalendarEvent & { start?: number; end?: number; kind?: EventKind | "deep" };
+      return {
+        ...event,
+        projectId: projectIds.has(event.projectId) ? event.projectId : inboxProjectId,
+        startAt: event.startAt ?? `${todayLabel}T${hourNumberToTime(legacyEvent.start ?? 9)}`,
+        endAt: event.endAt ?? `${todayLabel}T${hourNumberToTime(legacyEvent.end ?? 10)}`,
+        kind: legacyEvent.kind === "deep" ? "focus" : legacyEvent.kind ?? "meeting",
+        note: event.note ?? "",
+      };
+    }),
     tasks: data.tasks.map((task) => ({
       ...task,
       projectId: projectIds.has(task.projectId) ? task.projectId : inboxProjectId,
@@ -238,6 +247,56 @@ function formatDue(task: Task) {
   return task.dueTime ? `${date} ${task.dueTime}` : date;
 }
 
+function hourNumberToTime(hour: number) {
+  const fullHour = Math.floor(hour);
+  const minutes = Math.round((hour - fullHour) * 60);
+  return `${String(fullHour).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+}
+
+function dateInputFromDate(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function dateFromInput(dateText: string) {
+  return new Date(`${dateText}T00:00:00`);
+}
+
+function addDays(dateText: string, days: number) {
+  const date = dateFromInput(dateText);
+  date.setDate(date.getDate() + days);
+  return dateInputFromDate(date);
+}
+
+function weekDatesFor(dateText: string) {
+  const date = dateFromInput(dateText);
+  const day = date.getDay();
+  const mondayOffset = day === 0 ? -6 : 1 - day;
+  return Array.from({ length: 7 }, (_, index) => addDays(dateInputFromDate(date), mondayOffset + index));
+}
+
+function formatWeekDay(dateText: string) {
+  const date = dateFromInput(dateText);
+  const weekdays = ["日", "一", "二", "三", "四", "五", "六"];
+  return `${date.getMonth() + 1}/${date.getDate()} 周${weekdays[date.getDay()]}`;
+}
+
+function eventDate(event: CalendarEvent) {
+  return event.startAt.slice(0, 10);
+}
+
+function eventTimeRange(event: CalendarEvent) {
+  return `${event.startAt.slice(11, 16)}-${event.endAt.slice(11, 16)}`;
+}
+
+function eventMinutes(event: CalendarEvent) {
+  const start = new Date(event.startAt).getTime();
+  const end = new Date(event.endAt).getTime();
+  return Math.max(0, Math.round((end - start) / 60000));
+}
+
 function inferPriority(text: string): Priority {
   if (text.includes("截止") || text.includes("必须") || text.includes("重要") || text.includes("今天")) return "high";
   if (text.includes("本周") || text.includes("周") || text.includes("确认")) return "medium";
@@ -258,6 +317,12 @@ export default function Home() {
   const [newTaskDueTime, setNewTaskDueTime] = useState("");
   const [newTaskPriority, setNewTaskPriority] = useState<Priority>("medium");
   const [newTaskNote, setNewTaskNote] = useState("");
+  const [meetingTitle, setMeetingTitle] = useState("");
+  const [meetingDate, setMeetingDate] = useState(todayLabel);
+  const [meetingStart, setMeetingStart] = useState("13:30");
+  const [meetingEnd, setMeetingEnd] = useState("14:00");
+  const [meetingProjectId, setMeetingProjectId] = useState("client");
+  const [meetingNote, setMeetingNote] = useState("");
   const [planApplied, setPlanApplied] = useState(false);
 
   useEffect(() => {
@@ -347,6 +412,22 @@ export default function Home() {
   const selectedDoneTasks = selectedProjectTasks.filter((task) => task.status === "done");
   const selectedProgress = selectedProject ? progressForProject(selectedProject.id) : 0;
   const selectedNextTask = selectedProject ? nextTaskForProject(selectedProject.id) : undefined;
+  const weekDates = useMemo(() => weekDatesFor(todayLabel), []);
+  const weekDateSet = useMemo(() => new Set(weekDates), [weekDates]);
+  const weekSchedule = weekDates.map((date) => {
+    const dayEvents = data.events
+      .filter((event) => eventDate(event) === date)
+      .sort((a, b) => a.startAt.localeCompare(b.startAt));
+    const dayTasks = activeTasks
+      .filter((task) => task.dueDate === date)
+      .sort((a, b) => (a.dueTime || "23:59").localeCompare(b.dueTime || "23:59"));
+    const taskMinutes = dayTasks.reduce((total, task) => total + task.estimate, 0);
+    const eventLoad = dayEvents.reduce((total, event) => total + eventMinutes(event), 0);
+    const loadRatio = Math.min(100, Math.round(((taskMinutes + eventLoad) / 420) * 100));
+    return { date, events: dayEvents, tasks: dayTasks, taskMinutes, eventLoad, loadRatio };
+  });
+  const weekTaskCount = activeTasks.filter((task) => task.dueDate && weekDateSet.has(task.dueDate)).length;
+  const weekMeetingCount = data.events.filter((event) => event.kind === "meeting" && weekDateSet.has(eventDate(event))).length;
 
   const suggestions = [
     highPriorityTasks.length
@@ -514,6 +595,29 @@ export default function Home() {
     setNewTaskNote("");
   }
 
+  function addMeeting(event: FormEvent) {
+    event.preventDefault();
+    const title = meetingTitle.trim();
+    if (!title || !meetingDate || !meetingStart || !meetingEnd) return;
+
+    const meeting: CalendarEvent = {
+      id: makeId("event"),
+      title,
+      projectId: meetingProjectId,
+      startAt: `${meetingDate}T${meetingStart}`,
+      endAt: `${meetingDate}T${meetingEnd}`,
+      kind: "meeting",
+      note: meetingNote.trim(),
+    };
+
+    setData((current) => ({
+      ...current,
+      events: [meeting, ...current.events],
+    }));
+    setMeetingTitle("");
+    setMeetingNote("");
+  }
+
   function applyPlan() {
     const firstHigh = highPriorityTasks[0];
     if (!firstHigh) return;
@@ -524,9 +628,10 @@ export default function Home() {
           id: makeId("event"),
           title: firstHigh.title,
           projectId: firstHigh.projectId,
-          start: 15,
-          end: Math.min(18, 15 + firstHigh.estimate / 60),
-          kind: "deep",
+          startAt: `${todayLabel}T15:00`,
+          endAt: `${todayLabel}T${hourNumberToTime(Math.min(18, 15 + firstHigh.estimate / 60))}`,
+          kind: "focus",
+          note: "由 AI 今日建议加入",
         },
         ...current.events,
       ],
@@ -539,18 +644,6 @@ export default function Home() {
     setSelectedProjectId("client");
     setPlanApplied(false);
   }
-
-  const heatRows = realProjects.slice(0, 4).map((project, index) => {
-    const projectTasks = liveTasks.filter((task) => task.projectId === project.id && task.status !== "done");
-    return {
-      name: project.name.slice(0, 4),
-      values: Array.from({ length: 7 }, (_, day) => {
-        const base = Math.min(3, projectTasks.length);
-        const pressure = project.status === "waiting" ? 1 : project.status === "slow" ? 0 : 2;
-        return Math.max(0, Math.min(3, Math.round((base + pressure + ((day + index) % 3)) / 2)));
-      }),
-    };
-  });
 
   const isTrashView = view === "trash";
 
@@ -665,50 +758,80 @@ export default function Home() {
 
             <section className="panel wide">
               <div className="panel-head">
-                <h2>今日时间轴</h2>
-                <span>09:00-18:00</span>
+                <h2>会议安排</h2>
+                <span>{weekMeetingCount} 个本周会议</span>
               </div>
-              <div className="timeline">
-                {Array.from({ length: 10 }, (_, index) => (
-                  <span className="hour" key={index}>
-                    {String(index + 9).padStart(2, "0")}:00
-                  </span>
-                ))}
-                <div className="lane">
-                  {data.events.map((event) => {
-                    const top = ((event.start - 9) / 9) * 100;
-                    const height = ((event.end - event.start) / 9) * 100;
-                    return (
-                      <button
-                        className={`event ${event.kind}`}
-                        key={event.id}
-                        style={{ top: `${top}%`, height: `${Math.max(height, 8)}%` }}
-                        type="button"
-                        onClick={() => setSelectedProjectId(event.projectId)}
-                      >
-                        <strong>{event.title}</strong>
-                        <span>
-                          {event.start}:00-{event.end % 1 ? `${Math.floor(event.end)}:30` : `${event.end}:00`}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
+              <form className="meeting-composer" onSubmit={addMeeting}>
+                <label>
+                  会议主题
+                  <input value={meetingTitle} onChange={(event) => setMeetingTitle(event.target.value)} placeholder="例如：项目同步会" />
+                </label>
+                <label>
+                  日期
+                  <input type="date" value={meetingDate} onChange={(event) => setMeetingDate(event.target.value)} />
+                </label>
+                <label>
+                  开始
+                  <input type="time" value={meetingStart} onChange={(event) => setMeetingStart(event.target.value)} />
+                </label>
+                <label>
+                  结束
+                  <input type="time" value={meetingEnd} onChange={(event) => setMeetingEnd(event.target.value)} />
+                </label>
+                <label>
+                  关联项目
+                  <select value={meetingProjectId} onChange={(event) => setMeetingProjectId(event.target.value)}>
+                    {visibleProjects.map((project) => (
+                      <option key={project.id} value={project.id}>
+                        {project.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  备注
+                  <input value={meetingNote} onChange={(event) => setMeetingNote(event.target.value)} placeholder="可选" />
+                </label>
+                <button type="submit">添加会议</button>
+              </form>
             </section>
 
             <section className="panel wide">
               <div className="panel-head">
-                <h2>未来负载</h2>
-                <span>未来 7 天</span>
+                <h2>本周时间轴</h2>
+                <span>{weekTaskCount} 个 Todo · {weekMeetingCount} 个会议</span>
               </div>
-              <div className="heatmap">
-                <span />
-                {["一", "二", "三", "四", "五", "六", "日"].map((day) => (
-                  <b key={day}>{day}</b>
-                ))}
-                {heatRows.map((row) => (
-                  <FragmentRow key={row.name} name={row.name} values={row.values} />
+              <div className="week-timeline">
+                {weekSchedule.map((day) => (
+                  <article className={`week-day ${day.date === todayLabel ? "today" : ""}`} key={day.date}>
+                    <header>
+                      <div>
+                        <strong>{formatWeekDay(day.date)}</strong>
+                        <small>{day.taskMinutes + day.eventLoad} 分钟负载</small>
+                      </div>
+                      <span>{day.events.length + day.tasks.length}</span>
+                    </header>
+                    <div className="load-bar" aria-label={`${day.date} 负载`}>
+                      <i style={{ width: `${day.loadRatio}%` }} />
+                    </div>
+                    <div className="week-items">
+                      {day.events.map((event) => (
+                        <button className={`week-item ${event.kind}`} key={event.id} type="button" onClick={() => setSelectedProjectId(event.projectId)}>
+                          <strong>{event.title}</strong>
+                          <span>{eventTimeRange(event)} · {projectsById[event.projectId]?.name ?? "Inbox / 未归类"}</span>
+                          {event.note && <small>{event.note}</small>}
+                        </button>
+                      ))}
+                      {day.tasks.map((task) => (
+                        <button className={`week-item todo ${task.priority}`} key={task.id} type="button" onClick={() => setSelectedProjectId(task.projectId)}>
+                          <strong>{task.title}</strong>
+                          <span>{task.dueTime || "未定时间"} · {projectsById[task.projectId]?.name ?? "Inbox / 未归类"}</span>
+                          {task.note && <small>{task.note}</small>}
+                        </button>
+                      ))}
+                      {!day.events.length && !day.tasks.length && <p className="empty-state">暂无安排</p>}
+                    </div>
+                  </article>
                 ))}
               </div>
             </section>
@@ -992,18 +1115,5 @@ function TrashTaskRow({
         </button>
       </div>
     </article>
-  );
-}
-
-function FragmentRow({ name, values }: { name: string; values: number[] }) {
-  return (
-    <>
-      <span className="heat-label">{name}</span>
-      {values.map((value, index) => (
-        <span className="heat-cell" data-load={value} key={`${name}-${index}`}>
-          {value > 0 ? value : ""}
-        </span>
-      ))}
-    </>
   );
 }

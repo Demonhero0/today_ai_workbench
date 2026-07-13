@@ -448,102 +448,149 @@ label {
   line-height: 1;
 }
 
-.timeline {
+.meeting-composer {
   display: grid;
-  grid-template-columns: 64px minmax(0, 1fr);
-  min-height: 420px;
-  position: relative;
+  grid-template-columns: minmax(190px, 1fr) minmax(136px, 0.48fr) minmax(104px, 0.32fr) minmax(104px, 0.32fr) minmax(150px, 0.52fr) minmax(160px, 0.58fr) auto;
+  gap: 10px;
+  align-items: end;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel-strong);
 }
 
-.hour {
-  border-top: 1px solid var(--line);
+.meeting-composer button {
+  min-height: 40px;
+  border-radius: 8px;
+  padding: 0 14px;
+  background: var(--accent);
+  color: #fff;
+}
+
+.week-timeline {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(190px, 1fr));
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.week-day {
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  gap: 10px;
+  min-height: 310px;
+  min-width: 190px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel-strong);
+}
+
+.week-day.today {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px rgba(47, 111, 104, 0.28);
+}
+
+.week-day header {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: start;
+}
+
+.week-day header div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.week-day header strong,
+.week-item strong {
+  overflow-wrap: anywhere;
+}
+
+.week-day header small,
+.week-item span,
+.week-item small {
   color: var(--muted);
   font-size: 12px;
-  padding-top: 5px;
 }
 
-.lane {
-  position: relative;
-  min-height: 420px;
-  background: repeating-linear-gradient(to bottom, transparent 0, transparent 41px, rgba(216, 210, 198, 0.72) 42px);
-}
-
-.event {
-  position: absolute;
-  left: 0;
-  right: 0;
+.week-day header span {
   display: grid;
-  gap: 2px;
-  align-content: start;
+  place-items: center;
+  min-width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-size: 13px;
+}
+
+.load-bar {
+  height: 7px;
+  border-radius: 999px;
+  background: #eee8dd;
   overflow: hidden;
+}
+
+.load-bar i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+}
+
+.week-items {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+}
+
+.week-item {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  min-height: 74px;
+  padding: 10px;
   text-align: left;
+  border: 1px solid transparent;
   border-left: 4px solid var(--accent);
+  border-radius: 8px;
   background: var(--accent-soft);
   color: var(--foreground);
-  border-radius: 8px;
-  padding: 9px 10px;
 }
 
-.event span {
-  color: var(--muted);
-  font-size: 12px;
-}
-
-.event.meeting {
+.week-item.meeting {
   border-left-color: var(--blue);
   background: rgba(61, 99, 143, 0.13);
 }
 
-.event.deep {
+.week-item.focus {
   border-left-color: var(--accent);
 }
 
-.event.admin {
+.week-item.admin {
   border-left-color: var(--gold);
   background: rgba(155, 106, 47, 0.14);
 }
 
-.heatmap {
-  display: grid;
-  grid-template-columns: 84px repeat(7, minmax(32px, 1fr));
-  gap: 6px;
-  align-items: center;
+.week-item.todo {
+  background: #f7f3ec;
+  border-left-color: var(--muted);
 }
 
-.heatmap b,
-.heat-label,
-.heat-cell {
-  min-height: 32px;
-  display: grid;
-  place-items: center;
-  border-radius: 7px;
-  font-size: 13px;
+.week-item.todo.high {
+  border-left-color: var(--red);
 }
 
-.heatmap b,
-.heat-label {
-  color: var(--muted);
-  font-weight: 500;
+.week-item.todo.medium {
+  border-left-color: var(--gold);
 }
 
-.heat-label {
-  justify-content: start;
-}
-
-.heat-cell {
-  background: #eee8dd;
-}
-
-.heat-cell[data-load="1"] {
-  background: rgba(79, 124, 79, 0.18);
-}
-
-.heat-cell[data-load="2"] {
-  background: rgba(155, 106, 47, 0.2);
-}
-
-.heat-cell[data-load="3"] {
-  background: rgba(168, 72, 66, 0.2);
+.week-item.todo.low {
+  border-left-color: var(--green);
 }
 
 .project-card {
@@ -695,6 +742,7 @@ label {
   .task,
   .today-task,
   .task-composer,
+  .meeting-composer,
   .project-composer,
   .dashboard-grid {
     grid-template-columns: 1fr;
@@ -736,15 +784,13 @@ label {
     font-size: 26px;
   }
 
-  .heatmap {
-    grid-template-columns: 64px repeat(7, minmax(24px, 1fr));
-    gap: 4px;
+  .week-timeline {
+    grid-template-columns: 1fr;
+    overflow: visible;
   }
 
-  .heatmap b,
-  .heat-label,
-  .heat-cell {
-    min-height: 28px;
-    font-size: 12px;
+  .week-day {
+    min-width: 0;
+    min-height: 0;
   }
 }
