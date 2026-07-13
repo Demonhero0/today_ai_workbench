@@ -4,7 +4,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 
 type TaskStatus = "todo" | "doing" | "waiting" | "done";
 type Priority = "high" | "medium" | "low";
-type View = "today" | "projects";
+type View = "today" | "projects" | "trash";
 
 type Task = {
   id: string;
@@ -16,6 +16,7 @@ type Task = {
   estimate: number;
   note: string;
   createdAt: string;
+  deletedAt?: string;
 };
 
 type Project = {
@@ -202,6 +203,7 @@ function normalizeData(data: WorkbenchData): WorkbenchData {
     tasks: data.tasks.map((task) => ({
       ...task,
       projectId: projectIds.has(task.projectId) ? task.projectId : inboxProjectId,
+      deletedAt: task.deletedAt,
     })),
   };
 }
@@ -289,15 +291,17 @@ export default function Home() {
   const selectedProject = projectsById[selectedProjectId] ?? data.projects[0];
   const visibleProjects = data.projects;
   const realProjects = data.projects.filter((project) => project.id !== inboxProjectId);
+  const liveTasks = data.tasks.filter((task) => !task.deletedAt);
+  const trashedTasks = data.tasks.filter((task) => task.deletedAt);
 
-  const activeTasks = data.tasks.filter((task) => task.status !== "done");
+  const activeTasks = liveTasks.filter((task) => task.status !== "done");
   const highPriorityTasks = activeTasks.filter((task) => task.priority === "high");
   const waitingProjects = realProjects.filter((project) => project.status === "waiting" || project.status === "slow");
-  const doneTasks = data.tasks.filter((task) => task.status === "done");
+  const doneTasks = liveTasks.filter((task) => task.status === "done");
   const inboxTasks = activeTasks.filter((task) => task.projectId === inboxProjectId);
 
   function tasksForProject(projectId: string) {
-    return data.tasks.filter((task) => task.projectId === projectId);
+    return liveTasks.filter((task) => task.projectId === projectId);
   }
 
   function activeTasksForProject(projectId: string) {
@@ -341,6 +345,20 @@ export default function Home() {
   }
 
   function deleteTask(taskId: string) {
+    setData((current) => ({
+      ...current,
+      tasks: current.tasks.map((task) => (task.id === taskId ? { ...task, deletedAt: new Date().toISOString() } : task)),
+    }));
+  }
+
+  function restoreTask(taskId: string) {
+    setData((current) => ({
+      ...current,
+      tasks: current.tasks.map((task) => (task.id === taskId ? { ...task, deletedAt: undefined } : task)),
+    }));
+  }
+
+  function permanentlyDeleteTask(taskId: string) {
     setData((current) => ({
       ...current,
       tasks: current.tasks.filter((task) => task.id !== taskId),
@@ -493,7 +511,7 @@ export default function Home() {
   }
 
   const heatRows = realProjects.slice(0, 4).map((project, index) => {
-    const projectTasks = data.tasks.filter((task) => task.projectId === project.id && task.status !== "done");
+    const projectTasks = liveTasks.filter((task) => task.projectId === project.id && task.status !== "done");
     return {
       name: project.name.slice(0, 4),
       values: Array.from({ length: 7 }, (_, day) => {
@@ -518,6 +536,7 @@ export default function Home() {
           {[
             ["today", "今日"],
             ["projects", "项目"],
+            ["trash", `回收站 ${trashedTasks.length ? `(${trashedTasks.length})` : ""}`],
           ].map(([key, label]) => (
             <button key={key} className={view === key ? "active" : ""} type="button" onClick={() => setView(key as View)}>
               {label}
@@ -587,7 +606,7 @@ export default function Home() {
                 <span>{activeTasks.length} 个未完成</span>
               </div>
               <div className="task-list">
-                {data.tasks.map((task) => (
+                {liveTasks.map((task) => (
                   <TaskRow
                     key={task.id}
                     task={task}
@@ -595,6 +614,7 @@ export default function Home() {
                     projectsById={projectsById}
                     onDelete={deleteTask}
                     onUpdate={updateTask}
+                    deleteLabel="移入回收站"
                     showProject
                   />
                 ))}
@@ -742,6 +762,7 @@ export default function Home() {
                     projectsById={projectsById}
                     onDelete={deleteTask}
                     onUpdate={updateTask}
+                    deleteLabel="移入回收站"
                   />
                 ))}
                 {!selectedActiveTasks.length && <p className="empty-state">这个项目暂时没有未完成 Todo。</p>}
@@ -762,6 +783,7 @@ export default function Home() {
                     projectsById={projectsById}
                     onDelete={deleteTask}
                     onUpdate={updateTask}
+                    deleteLabel="移入回收站"
                   />
                 ))}
                 {!selectedDoneTasks.length && <p className="empty-state">还没有完成项。</p>}
@@ -778,6 +800,29 @@ export default function Home() {
                   <li key={item}>{item}</li>
                 ))}
               </ul>
+            </section>
+          </div>
+        )}
+
+        {view === "trash" && (
+          <div className="dashboard-grid">
+            <section className="panel wide">
+              <div className="panel-head">
+                <h2>回收站</h2>
+                <span>{trashedTasks.length} 个已删除 Todo</span>
+              </div>
+              <div className="task-list">
+                {trashedTasks.map((task) => (
+                  <TrashTaskRow
+                    key={task.id}
+                    task={task}
+                    projectsById={projectsById}
+                    onRestore={restoreTask}
+                    onPermanentDelete={permanentlyDeleteTask}
+                  />
+                ))}
+                {!trashedTasks.length && <p className="empty-state">回收站是空的。</p>}
+              </div>
             </section>
           </div>
         )}
@@ -803,6 +848,7 @@ function TaskRow({
   projectsById,
   onDelete,
   onUpdate,
+  deleteLabel = "删除",
   showProject = false,
 }: {
   task: Task;
@@ -810,6 +856,7 @@ function TaskRow({
   projectsById: Record<string, Project>;
   onDelete: (taskId: string) => void;
   onUpdate: (taskId: string, patch: Partial<Task>) => void;
+  deleteLabel?: string;
   showProject?: boolean;
 }) {
   return (
@@ -837,8 +884,39 @@ function TaskRow({
           ))}
         </select>
         <span className={`pill ${task.priority}`}>{priorityLabels[task.priority]}</span>
-        <button className="icon-button" type="button" onClick={() => onDelete(task.id)} aria-label={`删除 ${task.title}`}>
+        <button className="icon-button" type="button" onClick={() => onDelete(task.id)} aria-label={`${deleteLabel} ${task.title}`}>
           ×
+        </button>
+      </div>
+    </article>
+  );
+}
+
+function TrashTaskRow({
+  task,
+  projectsById,
+  onRestore,
+  onPermanentDelete,
+}: {
+  task: Task;
+  projectsById: Record<string, Project>;
+  onRestore: (taskId: string) => void;
+  onPermanentDelete: (taskId: string) => void;
+}) {
+  return (
+    <article className="task trash-task">
+      <div>
+        <strong>{task.title}</strong>
+        <p>
+          {projectsById[task.projectId]?.name ?? "Inbox / 未归类"} · 删除于 {task.deletedAt ? new Date(task.deletedAt).toLocaleString("zh-CN") : "未知时间"}
+        </p>
+      </div>
+      <div className="task-actions">
+        <button className="secondary" type="button" onClick={() => onRestore(task.id)}>
+          恢复
+        </button>
+        <button className="danger-button" type="button" onClick={() => onPermanentDelete(task.id)}>
+          永久删除
         </button>
       </div>
     </article>

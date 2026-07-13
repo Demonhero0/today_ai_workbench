@@ -129,7 +129,8 @@ label {
 .nav button,
 .new-project button,
 .capture button,
-.secondary {
+.secondary,
+.danger-button {
   border-radius: 8px;
   min-height: 40px;
   padding: 0 12px;
@@ -138,8 +139,15 @@ label {
   border: 1px solid var(--line);
 }
 
+.danger-button {
+  background: rgba(168, 72, 66, 0.12);
+  border-color: rgba(168, 72, 66, 0.3);
+  color: var(--red);
+}
+
 .nav button {
   text-align: left;
+  overflow-wrap: anywhere;
 }
 
 .nav button.active,
@@ -571,6 +579,10 @@ label {
   opacity: 0.74;
 }
 
+.trash-task {
+  opacity: 0.86;
+}
+
 .empty-state {
   margin: 0;
   padding: 12px;
@@ -589,7 +601,7 @@ label {
   }
 
   .nav {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(3, 1fr);
   }
 
   .nav button {
