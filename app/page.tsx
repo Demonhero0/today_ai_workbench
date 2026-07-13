@@ -522,6 +522,8 @@ export default function Home() {
     };
   });
 
+  const isTrashView = view === "trash";
+
   return (
     <main className="workbench">
       <aside className="sidebar" aria-label="工作台导航">
@@ -559,29 +561,35 @@ export default function Home() {
       <section className="content">
         <header className="hero">
           <div>
-            <p>2026-07-13 周一</p>
-            <h1>今天把哪些事推进一点点？</h1>
+            <p>{isTrashView ? "维护" : "2026-07-13 周一"}</p>
+            <h1>{isTrashView ? "回收站" : "今天把哪些事推进一点点？"}</h1>
             <span className={`save-state ${saveState}`}>{dataReady ? saveStateLabels[saveState] : "正在读取挂载数据文件"}</span>
           </div>
-          <button className="secondary" type="button" onClick={resetDemo}>
-            重置演示数据
-          </button>
+          {!isTrashView && (
+            <button className="secondary" type="button" onClick={resetDemo}>
+              重置演示数据
+            </button>
+          )}
         </header>
 
-        <form className="capture" onSubmit={handleCapture}>
-          <label>
-            快速记录
-            <input value={capture} onChange={(event) => setCapture(event.target.value)} placeholder="随手写一句，AI 帮你拆成任务" />
-          </label>
-          <button type="submit">AI 整理</button>
-        </form>
+        {!isTrashView && (
+          <>
+            <form className="capture" onSubmit={handleCapture}>
+              <label>
+                快速记录
+                <input value={capture} onChange={(event) => setCapture(event.target.value)} placeholder="随手写一句，AI 帮你拆成任务" />
+              </label>
+              <button type="submit">AI 整理</button>
+            </form>
 
-        <section className="stats" aria-label="今日概览">
-          <Metric label="今日待办" value={activeTasks.length.toString()} hint={`${highPriorityTasks.length} 个高优先级`} />
-          <Metric label="项目" value={realProjects.length.toString()} hint={`${waitingProjects.length} 个需要关注`} />
-          <Metric label="Inbox" value={inboxTasks.length.toString()} hint="未归类任务" />
-          <Metric label="已完成" value={doneTasks.length.toString()} hint="今日沉淀进展" />
-        </section>
+            <section className="stats" aria-label="今日概览">
+              <Metric label="今日待办" value={activeTasks.length.toString()} hint={`${highPriorityTasks.length} 个高优先级`} />
+              <Metric label="项目" value={realProjects.length.toString()} hint={`${waitingProjects.length} 个需要关注`} />
+              <Metric label="Inbox" value={inboxTasks.length.toString()} hint="未归类任务" />
+              <Metric label="已完成" value={doneTasks.length.toString()} hint="今日沉淀进展" />
+            </section>
+          </>
+        )}
 
         {view === "today" && (
           <div className="dashboard-grid">
