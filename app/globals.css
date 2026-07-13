@@ -758,6 +758,10 @@ label {
   background: var(--panel-strong);
 }
 
+.task-composer .task-note-field {
+  grid-column: 1 / -2;
+}
+
 .task-composer button {
   min-height: 40px;
   border-radius: 8px;

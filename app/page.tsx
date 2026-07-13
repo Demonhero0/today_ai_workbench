@@ -966,7 +966,7 @@ export default function Home() {
                     ))}
                   </select>
                 </label>
-                <label>
+                <label className="task-note-field">
                   备注
                   <input value={newTaskNote} onChange={(event) => setNewTaskNote(event.target.value)} placeholder="可选" />
                 </label>
@@ -982,6 +982,7 @@ export default function Home() {
                     onDelete={deleteTask}
                     onUpdate={updateTask}
                     deleteLabel="移入回收站"
+                    canChangeProject={false}
                   />
                 ))}
                 {!selectedActiveTasks.length && <p className="empty-state">这个项目暂时没有未完成 Todo。</p>}
@@ -995,12 +996,13 @@ export default function Home() {
                       key={task.id}
                       task={task}
                       projects={visibleProjects}
-                      projectsById={projectsById}
-                      onDelete={deleteTask}
-                      onUpdate={updateTask}
-                      deleteLabel="移入回收站"
-                    />
-                  ))}
+                    projectsById={projectsById}
+                    onDelete={deleteTask}
+                    onUpdate={updateTask}
+                    deleteLabel="移入回收站"
+                    canChangeProject={false}
+                  />
+                ))}
                   {!selectedDoneTasks.length && <p className="empty-state">还没有完成项。</p>}
                 </div>
               </details>
@@ -1064,6 +1066,7 @@ function TaskRow({
   onUpdate,
   deleteLabel = "删除",
   showProject = false,
+  canChangeProject = true,
 }: {
   task: Task;
   projects: Project[];
@@ -1072,6 +1075,7 @@ function TaskRow({
   onUpdate: (taskId: string, patch: Partial<Task>) => void;
   deleteLabel?: string;
   showProject?: boolean;
+  canChangeProject?: boolean;
 }) {
   return (
     <article className={`task ${task.status === "done" ? "done" : ""}`}>
@@ -1087,13 +1091,15 @@ function TaskRow({
         </label>
       </div>
       <div className="task-actions">
-        <select value={task.projectId} onChange={(event) => onUpdate(task.id, { projectId: event.target.value })} aria-label="所属项目">
-          {projects.map((project) => (
-            <option key={project.id} value={project.id}>
-              {project.name}
-            </option>
-          ))}
-        </select>
+        {canChangeProject && (
+          <select value={task.projectId} onChange={(event) => onUpdate(task.id, { projectId: event.target.value })} aria-label="所属项目">
+            {projects.map((project) => (
+              <option key={project.id} value={project.id}>
+                {project.name}
+              </option>
+            ))}
+          </select>
+        )}
         <input type="date" value={task.dueDate ?? ""} onChange={(event) => onUpdate(task.id, { dueDate: event.target.value, due: event.target.value || "未定" })} aria-label="截止日期" />
         <select value={task.status} onChange={(event) => onUpdate(task.id, { status: event.target.value as TaskStatus })} aria-label="任务状态">
           {Object.entries(statusLabels).map(([key, label]) => (
