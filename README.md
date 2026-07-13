@@ -1,98 +1,62 @@
-# vinext-starter
+# AI Personal Workbench
 
-A clean full-stack starter running on
-[vinext](https://github.com/cloudflare/vinext), with optional Cloudflare D1 and
-Drizzle support.
+A local-first personal workbench for schedules, tasks, parallel project tracking,
+and lightweight review.
+
+The app is intended to run in Docker so Node dependencies, framework caches, and
+runtime state stay out of the host project directory. The default Compose setup
+builds an image from the repository source and runs the built app without
+mounting the project folder into the container.
 
 ## Prerequisites
 
-- Node.js `>=22.13.0`
+- Docker Desktop or another Docker runtime with Compose support
 
-## Quick Start
+## Run
 
 ```bash
-npm install
-npm run dev
-npm run build
+npm run docker:up
 ```
 
-This starter does not use `wrangler.jsonc`.
+Open:
 
-## Included Shape
-
-- edit site code under `app/`
-- `.openai/hosting.json` declares optional Sites D1 and R2 bindings
-- `vite.config.ts` simulates declared bindings for local development
-- `db/schema.ts` starts intentionally empty
-- `examples/d1/` contains an optional D1 example surface
-- `drizzle.config.ts` supports local migration generation when needed
-
-## Workspace Auth Headers
-
-OpenAI workspace sites can read the current user's email from
-`oai-authenticated-user-email`.
-
-SIWC-authenticated workspace sites may also receive
-`oai-authenticated-user-full-name` when the user's SIWC profile has a non-empty
-`name` claim. The full-name value is percent-encoded UTF-8 and is accompanied by
-`oai-authenticated-user-full-name-encoding: percent-encoded-utf-8`.
-
-Treat the full name as optional and fall back to email when it is absent:
-
-```tsx
-import { headers } from "next/headers";
-
-export default async function Home() {
-  const requestHeaders = await headers();
-  const email = requestHeaders.get("oai-authenticated-user-email");
-  const encodedFullName = requestHeaders.get("oai-authenticated-user-full-name");
-  const fullName =
-    encodedFullName &&
-    requestHeaders.get("oai-authenticated-user-full-name-encoding") ===
-      "percent-encoded-utf-8"
-      ? decodeURIComponent(encodedFullName)
-      : null;
-
-  const displayName = fullName ?? email;
-  // ...
-}
+```text
+http://localhost:3000
 ```
 
-## Optional Dispatch-Owned ChatGPT Sign-In
+Stop the app:
 
-Import the ready-to-use helpers from `app/chatgpt-auth.ts` when the site needs
-optional or required ChatGPT sign-in:
+```bash
+npm run docker:down
+```
 
-- Use `getChatGPTUser()` for optional signed-in UI.
-- Use `requireChatGPTUser(returnTo)` for server-rendered pages that should send
-  anonymous visitors through Sign in with ChatGPT.
-- Use `chatGPTSignInPath(returnTo)` and `chatGPTSignOutPath(returnTo)` for
-  browser links or actions.
-- Pass a same-origin relative `returnTo` path for the destination after sign-in
-  or sign-out. The helper validates and safely encodes it.
-- Mark protected pages with `export const dynamic = "force-dynamic"` because
-  they depend on per-request identity headers.
+## Verify
 
-Dispatch owns `/signin-with-chatgpt`, `/signout-with-chatgpt`, `/callback`, the
-OAuth cookies, and identity header injection. Do not implement app routes for
-those reserved paths. Routes that do not import and call the helper remain
-anonymous-compatible.
+Build the Docker image:
 
-SIWC establishes identity only; it does not prove workspace membership. Use the
-Sites hosting platform's access policy controls for workspace-wide restrictions,
-or enforce explicit server-side membership or allowlist checks.
+```bash
+npm run docker:build
+```
 
-Use SIWC for account pages, user-specific dashboards, saved records, and write
-actions tied to the current ChatGPT user. Leave public content anonymous.
+Run the build and rendered HTML test inside Docker:
 
-## Useful Commands
+```bash
+npm run docker:test
+```
 
-- `npm run dev`: start local development
-- `npm run build`: verify the vinext build output
-- `npm test`: build the starter and verify its rendered loading skeleton
-- `npm run db:generate`: generate Drizzle migrations after schema changes
+## Host Cleanliness
 
-## Learn More
+The default Docker flow does not bind-mount the repository into the container.
+The image is built from scratch using `package-lock.json`, runs `npm ci` inside
+the image build, then runs the compiled app from the final image.
 
-- [vinext Documentation](https://github.com/cloudflare/vinext)
-- [Drizzle D1 Guide](https://orm.drizzle.team/docs/get-started/d1-new)
+`.dockerignore` excludes host-only directories such as `node_modules`, `dist`,
+`.vinext`, and `.wrangler`, so they cannot accidentally leak into the image.
+
+## Useful Files
+
+- `app/page.tsx`: the interactive workbench UI and local state logic
+- `app/globals.css`: product styling
+- `Dockerfile`: container image definition
+- `docker-compose.yml`: local Docker runtime
+- `.dockerignore`: keeps host dependencies and build output out of the image

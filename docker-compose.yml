@@ -1,0 +1,11 @@
+services:
+  workbench:
+    build:
+      context: .
+      target: runner
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_TELEMETRY_DISABLED: "1"
+      WRANGLER_LOG_PATH: /tmp/wrangler.log
+    init: true
