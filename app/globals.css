@@ -322,6 +322,56 @@ label {
   background: var(--panel-strong);
 }
 
+.today-task {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(150px, auto);
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel-strong);
+}
+
+.today-task.done {
+  opacity: 0.58;
+}
+
+.today-task.done strong {
+  text-decoration: line-through;
+}
+
+.today-task-main {
+  min-width: 0;
+}
+
+.today-task-main strong,
+.today-task-main p,
+.today-task-main small {
+  overflow-wrap: anywhere;
+}
+
+.today-task-main p,
+.today-task-main small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.today-task-status {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.today-task-status select {
+  width: auto;
+  min-width: 92px;
+}
+
 .task.done {
   opacity: 0.58;
 }
@@ -643,6 +693,7 @@ label {
   .hero,
   .capture,
   .task,
+  .today-task,
   .task-composer,
   .project-composer,
   .dashboard-grid {
@@ -659,6 +710,14 @@ label {
 
   .task-actions {
     justify-content: space-between;
+  }
+
+  .today-task-status {
+    justify-content: space-between;
+  }
+
+  .today-task-status select {
+    flex: 1 1 130px;
   }
 
   .task-actions select,

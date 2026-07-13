@@ -653,15 +653,11 @@ export default function Home() {
               </div>
               <div className="task-list">
                 {liveTasks.map((task) => (
-                  <TaskRow
+                  <TodayTaskRow
                     key={task.id}
                     task={task}
-                    projects={visibleProjects}
                     projectsById={projectsById}
-                    onDelete={deleteTask}
-                    onUpdate={updateTask}
-                    deleteLabel="移入回收站"
-                    showProject
+                    onStatusChange={(status) => updateTask(task.id, { status })}
                   />
                 ))}
               </div>
@@ -876,6 +872,38 @@ function Metric({ label, value, hint }: { label: string; value: string; hint: st
       <span>{label}</span>
       <strong>{value}</strong>
       <small>{hint}</small>
+    </article>
+  );
+}
+
+function TodayTaskRow({
+  task,
+  projectsById,
+  onStatusChange,
+}: {
+  task: Task;
+  projectsById: Record<string, Project>;
+  onStatusChange: (status: TaskStatus) => void;
+}) {
+  return (
+    <article className={`today-task ${task.status === "done" ? "done" : ""}`}>
+      <div className="today-task-main">
+        <strong>{task.title}</strong>
+        <p>
+          {projectsById[task.projectId]?.name ?? "Inbox / 未归类"} · {formatDue(task)}
+        </p>
+        {task.note && <small>{task.note}</small>}
+      </div>
+      <div className="today-task-status">
+        <span className={`pill ${task.priority}`}>{priorityLabels[task.priority]}</span>
+        <select value={task.status} onChange={(event) => onStatusChange(event.target.value as TaskStatus)} aria-label="任务状态">
+          {Object.entries(statusLabels).map(([key, label]) => (
+            <option key={key} value={key}>
+              {label}
+            </option>
+          ))}
+        </select>
+      </div>
     </article>
   );
 }
