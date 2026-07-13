@@ -279,6 +279,18 @@ label {
   flex-wrap: wrap;
 }
 
+.panel-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.panel-actions .secondary {
+  min-height: 34px;
+}
+
 .panel h2 {
   margin: 0;
   font-size: 17px;
@@ -328,6 +340,16 @@ label {
   border: 1px solid var(--line);
   border-radius: 10px;
   background: var(--panel-strong);
+  min-width: 0;
+}
+
+.task > div {
+  min-width: 0;
+}
+
+.task strong,
+.task p {
+  overflow-wrap: anywhere;
 }
 
 .task.clickable {
@@ -779,14 +801,76 @@ label {
   gap: 8px;
   padding: 10px;
   border-radius: 8px;
+  overflow: hidden;
 }
 
 .project-todo-panel .task-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(104px, 1fr));
   justify-content: flex-start;
+  width: 100%;
 }
 
 .project-todo-panel .task-note {
   max-width: none;
+}
+
+.project-todo-panel .task-actions select,
+.project-todo-panel .task-actions input {
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+}
+
+.project-todo-panel .task-actions .pill,
+.project-todo-panel .task-actions .icon-button {
+  justify-self: start;
+}
+
+.archive-section {
+  display: grid;
+  gap: 8px;
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+}
+
+.archive-section summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.archive-list {
+  display: grid;
+  gap: 8px;
+}
+
+.archive-project {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  min-width: 0;
+  width: 100%;
+  text-align: left;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  background: var(--panel-strong);
+  color: var(--foreground);
+  padding: 9px 10px;
+}
+
+.archive-project span {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.archive-project small,
+.archive-project em {
+  color: var(--muted);
+  font-size: 12px;
+  font-style: normal;
 }
 
 .project-card.selected {

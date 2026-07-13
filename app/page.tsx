@@ -31,6 +31,7 @@ type Project = {
   updatedAt: string;
   nextAction: string;
   log: string[];
+  archivedAt?: string;
 };
 
 type CalendarEvent = {
@@ -189,7 +190,10 @@ function normalizeData(data: WorkbenchData): WorkbenchData {
   const projects = hasInbox ? data.projects : [starterData.projects[0], ...data.projects];
   const projectIds = new Set(projects.map((project) => project.id));
   return {
-    projects,
+    projects: projects.map((project) => ({
+      ...project,
+      archivedAt: project.archivedAt,
+    })),
     events: data.events.map((event) => {
       const legacyEvent = event as CalendarEvent & { start?: number; end?: number; kind?: EventKind | "deep" };
       return {
@@ -361,9 +365,10 @@ export default function Home() {
     return Object.fromEntries(data.projects.map((project) => [project.id, project]));
   }, [data.projects]);
 
-  const selectedProject = projectsById[selectedProjectId] ?? data.projects[0];
-  const visibleProjects = data.projects;
-  const realProjects = data.projects.filter((project) => project.id !== inboxProjectId);
+  const visibleProjects = data.projects.filter((project) => !project.archivedAt);
+  const archivedProjects = data.projects.filter((project) => project.archivedAt);
+  const selectedProject = visibleProjects.find((project) => project.id === selectedProjectId) ?? visibleProjects[0] ?? data.projects[0];
+  const realProjects = visibleProjects.filter((project) => project.id !== inboxProjectId);
   const liveTasks = data.tasks.filter((task) => !task.deletedAt);
   const trashedTasks = data.tasks.filter((task) => task.deletedAt);
 
@@ -546,6 +551,42 @@ export default function Home() {
       ...current,
       projects: current.projects.map((project) => (project.id === projectId ? { ...project, ...patch } : project)),
     }));
+  }
+
+  function archiveProject(projectId: string) {
+    if (projectId === inboxProjectId) return;
+    const fallbackProject = visibleProjects.find((project) => project.id !== projectId) ?? visibleProjects[0];
+    setData((current) => ({
+      ...current,
+      projects: current.projects.map((project) =>
+        project.id === projectId
+          ? {
+              ...project,
+              archivedAt: new Date().toISOString(),
+              updatedAt: "刚刚",
+              log: [`刚刚 · 项目已归档`, ...project.log].slice(0, 5),
+            }
+          : project,
+      ),
+    }));
+    if (selectedProjectId === projectId && fallbackProject) setSelectedProjectId(fallbackProject.id);
+  }
+
+  function restoreProject(projectId: string) {
+    setData((current) => ({
+      ...current,
+      projects: current.projects.map((project) =>
+        project.id === projectId
+          ? {
+              ...project,
+              archivedAt: undefined,
+              updatedAt: "刚刚",
+              log: [`刚刚 · 项目已恢复`, ...project.log].slice(0, 5),
+            }
+          : project,
+      ),
+    }));
+    setSelectedProjectId(projectId);
   }
 
   function addTaskToProject(event: FormEvent) {
@@ -921,7 +962,7 @@ export default function Home() {
             <section className="panel project-create-panel">
               <div className="panel-head">
                 <h2>创建项目</h2>
-                <span>{realProjects.length} 个项目 · {inboxTasks.length} 个未归类</span>
+                <span>{realProjects.length} 个项目 · {archivedProjects.length} 个已归档 · {inboxTasks.length} 个未归类</span>
               </div>
               <form className="project-composer inline" onSubmit={addProject}>
                 <label>
@@ -962,12 +1003,35 @@ export default function Home() {
                   );
                 })}
               </div>
+              {archivedProjects.length > 0 && (
+                <details className="archive-section">
+                  <summary>已归档项目 {archivedProjects.length} 个</summary>
+                  <div className="archive-list">
+                    {archivedProjects.map((project) => (
+                      <button className="archive-project" type="button" key={project.id} onClick={() => restoreProject(project.id)}>
+                        <span>
+                          <strong>{project.name}</strong>
+                          <small>{project.archivedAt ? new Date(project.archivedAt).toLocaleDateString("zh-CN") : "已归档"}</small>
+                        </span>
+                        <em>恢复</em>
+                      </button>
+                    ))}
+                  </div>
+                </details>
+              )}
             </section>
 
             <section className="panel project-todo-panel">
               <div className="panel-head">
                 <h2>项目 Todo</h2>
-                <span>{selectedProject.name} · {selectedActiveTasks.length} 个未完成</span>
+                <div className="panel-actions">
+                  <span>{selectedProject.name} · {selectedActiveTasks.length} 个未完成</span>
+                  {selectedProject.id !== inboxProjectId && (
+                    <button className="secondary" type="button" onClick={() => archiveProject(selectedProject.id)}>
+                      归档项目
+                    </button>
+                  )}
+                </div>
               </div>
               <form className="task-composer" onSubmit={addTaskToProject}>
                 <label>
