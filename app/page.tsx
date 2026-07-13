@@ -1,11 +1,13 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import type { FormEvent, ReactNode } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type TaskStatus = "todo" | "doing" | "waiting" | "done";
 type Priority = "high" | "medium" | "low";
 type View = "today" | "meetings" | "projects" | "trash";
 type EventKind = "meeting" | "focus" | "admin";
+type DetailTarget = { kind: "task" | "event"; id: string } | null;
 
 type Task = {
   id: string;
@@ -306,6 +308,7 @@ export default function Home() {
   const [meetingProjectId, setMeetingProjectId] = useState("client");
   const [meetingNote, setMeetingNote] = useState("");
   const [planApplied, setPlanApplied] = useState(false);
+  const [detailTarget, setDetailTarget] = useState<DetailTarget>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -413,6 +416,8 @@ export default function Home() {
     .sort((a, b) => a.startAt.localeCompare(b.startAt));
   const weekTaskCount = liveTasks.filter((task) => task.dueDate && weekDateSet.has(task.dueDate)).length;
   const weekMeetingCount = data.events.filter((event) => event.kind === "meeting" && weekDateSet.has(eventDate(event))).length;
+  const detailTask = detailTarget?.kind === "task" ? data.tasks.find((task) => task.id === detailTarget.id) : undefined;
+  const detailEvent = detailTarget?.kind === "event" ? data.events.find((event) => event.id === detailTarget.id) : undefined;
 
   const suggestions = [
     highPriorityTasks.length
@@ -762,13 +767,29 @@ export default function Home() {
                     </div>
                     <div className="week-items">
                       {day.events.map((event) => (
-                        <button className={`week-item ${event.kind}`} key={event.id} type="button" onClick={() => setSelectedProjectId(event.projectId)}>
+                        <button
+                          className={`week-item ${event.kind}`}
+                          key={event.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedProjectId(event.projectId);
+                            setDetailTarget({ kind: "event", id: event.id });
+                          }}
+                        >
                           <strong>{event.title}</strong>
                           <span><em className="time-chip">{eventTimeRange(event)}</em> {projectsById[event.projectId]?.name ?? "Inbox / 未归类"}</span>
                         </button>
                       ))}
                       {day.tasks.map((task) => (
-                        <button className={`week-item todo ${task.priority} ${task.status === "done" ? "done" : ""}`} key={task.id} type="button" onClick={() => setSelectedProjectId(task.projectId)}>
+                        <button
+                          className={`week-item todo ${task.priority} ${task.status === "done" ? "done" : ""}`}
+                          key={task.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedProjectId(task.projectId);
+                            setDetailTarget({ kind: "task", id: task.id });
+                          }}
+                        >
                           <strong>{task.title}</strong>
                           <span>{task.status === "done" ? "已完成" : "Todo"} · {projectsById[task.projectId]?.name ?? "Inbox / 未归类"}</span>
                         </button>
@@ -841,7 +862,15 @@ export default function Home() {
                     </header>
                     <div className="week-items">
                       {day.events.map((event) => (
-                        <button className="week-item meeting" key={event.id} type="button" onClick={() => setSelectedProjectId(event.projectId)}>
+                        <button
+                          className="week-item meeting"
+                          key={event.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedProjectId(event.projectId);
+                            setDetailTarget({ kind: "event", id: event.id });
+                          }}
+                        >
                           <strong>{event.title}</strong>
                           <span><em className="time-chip">{eventTimeRange(event)}</em> {projectsById[event.projectId]?.name ?? "Inbox / 未归类"}</span>
                         </button>
@@ -861,13 +890,20 @@ export default function Home() {
               <div className="meeting-table">
                 {futureMeetings.map((event) => (
                   <article className="meeting-row" key={event.id}>
-                    <div>
+                    <button
+                      className="meeting-summary"
+                      type="button"
+                      onClick={() => {
+                        setSelectedProjectId(event.projectId);
+                        setDetailTarget({ kind: "event", id: event.id });
+                      }}
+                    >
                       <strong>{event.title}</strong>
                       <p>
                         <em className="time-chip">{eventDate(event)} {eventTimeRange(event)}</em>
                         {projectsById[event.projectId]?.name ?? "Inbox / 未归类"}
                       </p>
-                    </div>
+                    </button>
                     <label>
                       会议备注
                       <textarea value={event.note} onChange={(inputEvent) => updateEvent(event.id, { note: inputEvent.target.value })} placeholder="会议中随手记录结论、待跟进事项或纪要" />
@@ -969,6 +1005,7 @@ export default function Home() {
                     onUpdate={updateTask}
                     deleteLabel="移入回收站"
                     canChangeProject={false}
+                    onOpen={() => setDetailTarget({ kind: "task", id: task.id })}
                   />
                 ))}
                 {!selectedActiveTasks.length && <p className="empty-state">这个项目暂时没有未完成 Todo。</p>}
@@ -987,6 +1024,7 @@ export default function Home() {
                     onUpdate={updateTask}
                     deleteLabel="移入回收站"
                     canChangeProject={false}
+                    onOpen={() => setDetailTarget({ kind: "task", id: task.id })}
                   />
                 ))}
                   {!selectedDoneTasks.length && <p className="empty-state">还没有完成项。</p>}
@@ -997,6 +1035,109 @@ export default function Home() {
           </div>
         )}
 
+        {detailTask && (
+          <DetailModal title="Todo 详情" onClose={() => setDetailTarget(null)}>
+            <div className="detail-form">
+              <label>
+                标题
+                <input value={detailTask.title} onChange={(event) => updateTask(detailTask.id, { title: event.target.value })} />
+              </label>
+              <label>
+                所属项目
+                <select value={detailTask.projectId} onChange={(event) => updateTask(detailTask.id, { projectId: event.target.value })}>
+                  {visibleProjects.map((project) => (
+                    <option key={project.id} value={project.id}>
+                      {project.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                截止日期
+                <input type="date" value={detailTask.dueDate ?? ""} onChange={(event) => updateTask(detailTask.id, { dueDate: event.target.value, due: event.target.value || "未定" })} />
+              </label>
+              <label>
+                状态
+                <select value={detailTask.status} onChange={(event) => updateTask(detailTask.id, { status: event.target.value as TaskStatus })}>
+                  {Object.entries(statusLabels).map(([key, label]) => (
+                    <option key={key} value={key}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                优先级
+                <select value={detailTask.priority} onChange={(event) => updateTask(detailTask.id, { priority: event.target.value as Priority })}>
+                  {Object.entries(priorityLabels).map(([key, label]) => (
+                    <option key={key} value={key}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="detail-wide">
+                备注
+                <textarea value={detailTask.note ?? ""} onChange={(event) => updateTask(detailTask.id, { note: event.target.value })} placeholder="补充上下文、结论或待确认事项" />
+              </label>
+              <div className="detail-meta">
+                <span>创建于 {detailTask.createdAt}</span>
+                <button className="danger-button" type="button" onClick={() => {
+                  deleteTask(detailTask.id);
+                  setDetailTarget(null);
+                }}>
+                  移入回收站
+                </button>
+              </div>
+            </div>
+          </DetailModal>
+        )}
+
+        {detailEvent && (
+          <DetailModal title={detailEvent.kind === "meeting" ? "会议详情" : "日程详情"} onClose={() => setDetailTarget(null)}>
+            <div className="detail-form">
+              <label>
+                主题
+                <input value={detailEvent.title} onChange={(event) => updateEvent(detailEvent.id, { title: event.target.value })} />
+              </label>
+              <label>
+                关联项目
+                <select value={detailEvent.projectId} onChange={(event) => updateEvent(detailEvent.id, { projectId: event.target.value })}>
+                  {visibleProjects.map((project) => (
+                    <option key={project.id} value={project.id}>
+                      {project.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                日期
+                <input
+                  type="date"
+                  value={eventDate(detailEvent)}
+                  onChange={(event) =>
+                    updateEvent(detailEvent.id, {
+                      startAt: `${event.target.value}T${detailEvent.startAt.slice(11, 16)}`,
+                      endAt: `${event.target.value}T${detailEvent.endAt.slice(11, 16)}`,
+                    })
+                  }
+                />
+              </label>
+              <label>
+                开始
+                <input type="time" value={detailEvent.startAt.slice(11, 16)} onChange={(event) => updateEvent(detailEvent.id, { startAt: `${eventDate(detailEvent)}T${event.target.value}` })} />
+              </label>
+              <label>
+                结束
+                <input type="time" value={detailEvent.endAt.slice(11, 16)} onChange={(event) => updateEvent(detailEvent.id, { endAt: `${eventDate(detailEvent)}T${event.target.value}` })} />
+              </label>
+              <label className="detail-wide">
+                备注
+                <textarea value={detailEvent.note} onChange={(event) => updateEvent(detailEvent.id, { note: event.target.value })} placeholder="记录会议结论、纪要或待跟进事项" />
+              </label>
+            </div>
+          </DetailModal>
+        )}
       </section>
     </main>
   );
@@ -1009,6 +1150,22 @@ function Metric({ label, value, hint }: { label: string; value: string; hint: st
       <strong>{value}</strong>
       <small>{hint}</small>
     </article>
+  );
+}
+
+function DetailModal({ title, children, onClose }: { title: string; children: ReactNode; onClose: () => void }) {
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="detail-modal" role="dialog" aria-modal="true" aria-label={title} onMouseDown={(event) => event.stopPropagation()}>
+        <header>
+          <h2>{title}</h2>
+          <button className="icon-button" type="button" onClick={onClose} aria-label="关闭详情">
+            ×
+          </button>
+        </header>
+        {children}
+      </section>
+    </div>
   );
 }
 
@@ -1053,6 +1210,7 @@ function TaskRow({
   deleteLabel = "删除",
   showProject = false,
   canChangeProject = true,
+  onOpen,
 }: {
   task: Task;
   projects: Project[];
@@ -1062,9 +1220,22 @@ function TaskRow({
   deleteLabel?: string;
   showProject?: boolean;
   canChangeProject?: boolean;
+  onOpen?: () => void;
 }) {
   return (
-    <article className={`task ${task.status === "done" ? "done" : ""}`}>
+    <article
+      className={`task ${task.status === "done" ? "done" : ""} ${onOpen ? "clickable" : ""}`}
+      role={onOpen ? "button" : undefined}
+      tabIndex={onOpen ? 0 : undefined}
+      onClick={onOpen}
+      onKeyDown={(event) => {
+        if (!onOpen) return;
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onOpen();
+        }
+      }}
+    >
       <div>
         <strong>{task.title}</strong>
         <p>
@@ -1073,10 +1244,10 @@ function TaskRow({
         </p>
         <label className="task-note">
           备注
-          <input value={task.note ?? ""} onChange={(event) => onUpdate(task.id, { note: event.target.value })} placeholder="补充一点上下文" />
+          <input value={task.note ?? ""} onClick={(event) => event.stopPropagation()} onChange={(event) => onUpdate(task.id, { note: event.target.value })} placeholder="补充一点上下文" />
         </label>
       </div>
-      <div className="task-actions">
+      <div className="task-actions" onClick={(event) => event.stopPropagation()}>
         {canChangeProject && (
           <select value={task.projectId} onChange={(event) => onUpdate(task.id, { projectId: event.target.value })} aria-label="所属项目">
             {projects.map((project) => (
