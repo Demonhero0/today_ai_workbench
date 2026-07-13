@@ -165,19 +165,15 @@ const priorityLabels: Record<Priority, string> = {
   low: "低",
 };
 
+const saveStateLabels = {
+  idle: "等待保存到挂载数据文件",
+  saving: "正在保存到挂载数据文件",
+  saved: "已保存到挂载数据文件",
+  error: "数据文件暂时不可用",
+};
+
 function makeId(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-}
-
-function loadData(): WorkbenchData {
-  if (typeof window === "undefined") return starterData;
-  const saved = window.localStorage.getItem("ai-workbench-data");
-  if (!saved) return starterData;
-  try {
-    return JSON.parse(saved) as WorkbenchData;
-  } catch {
-    return starterData;
-  }
 }
 
 function inferDue(text: string) {
@@ -201,7 +197,8 @@ function clampProgress(value: number) {
 
 export default function Home() {
   const [data, setData] = useState<WorkbenchData>(starterData);
-  const [hydrated, setHydrated] = useState(false);
+  const [dataReady, setDataReady] = useState(false);
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [view, setView] = useState<View>("today");
   const [selectedProjectId, setSelectedProjectId] = useState("visa");
   const [capture, setCapture] = useState("周三前整理签证材料，今天先问中介清单");
@@ -210,14 +207,50 @@ export default function Home() {
   const [planApplied, setPlanApplied] = useState(false);
 
   useEffect(() => {
-    setData(loadData());
-    setHydrated(true);
+    let cancelled = false;
+
+    async function loadMountedData() {
+      try {
+        const response = await fetch("/api/workbench", { cache: "no-store" });
+        if (!response.ok) throw new Error("Unable to load data");
+        const payload = (await response.json()) as { data?: WorkbenchData | null };
+        if (!cancelled && payload.data) {
+          setData(payload.data);
+          setSelectedProjectId(payload.data.projects[0]?.id ?? "visa");
+        }
+      } catch {
+        if (!cancelled) setSaveState("error");
+      } finally {
+        if (!cancelled) setDataReady(true);
+      }
+    }
+
+    loadMountedData();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
-    if (!hydrated) return;
-    window.localStorage.setItem("ai-workbench-data", JSON.stringify(data));
-  }, [data, hydrated]);
+    if (!dataReady) return;
+
+    const saveTimer = window.setTimeout(async () => {
+      setSaveState("saving");
+      try {
+        const response = await fetch("/api/workbench", {
+          method: "PUT",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ data }),
+        });
+        if (!response.ok) throw new Error("Unable to save data");
+        setSaveState("saved");
+      } catch {
+        setSaveState("error");
+      }
+    }, 350);
+
+    return () => window.clearTimeout(saveTimer);
+  }, [data, dataReady]);
 
   const projectsById = useMemo(() => {
     return Object.fromEntries(data.projects.map((project) => [project.id, project]));
@@ -356,7 +389,6 @@ export default function Home() {
     setData(starterData);
     setSelectedProjectId("visa");
     setPlanApplied(false);
-    if (typeof window !== "undefined") window.localStorage.removeItem("ai-workbench-data");
   }
 
   const heatRows = data.projects.slice(0, 4).map((project, index) => {
@@ -410,6 +442,7 @@ export default function Home() {
           <div>
             <p>2026-07-13 周一</p>
             <h1>今天把哪些事推进一点点？</h1>
+            <span className={`save-state ${saveState}`}>{dataReady ? saveStateLabels[saveState] : "正在读取挂载数据文件"}</span>
           </div>
           <button className="secondary" type="button" onClick={resetDemo}>
             重置演示数据

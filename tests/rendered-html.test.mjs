@@ -23,6 +23,29 @@ async function render() {
   );
 }
 
+async function requestWorkbench(method, body) {
+  const workerUrl = new URL("../dist/server/index.js", import.meta.url);
+  workerUrl.searchParams.set("test", `${process.pid}-${Date.now()}-${method}`);
+  const { default: worker } = await import(workerUrl.href);
+
+  return worker.fetch(
+    new Request("http://localhost/api/workbench", {
+      method,
+      headers: { "content-type": "application/json" },
+      body: body ? JSON.stringify(body) : undefined,
+    }),
+    {
+      ASSETS: {
+        fetch: async () => new Response("Not found", { status: 404 }),
+      },
+    },
+    {
+      waitUntil() {},
+      passThroughOnException() {},
+    },
+  );
+}
+
 test("server-renders the workbench shell", async () => {
   const response = await render();
   assert.equal(response.status, 200);
@@ -48,4 +71,20 @@ test("does not keep starter preview code", async () => {
   assert.doesNotMatch(page, /SkeletonPreview|codex-preview|react-loading-skeleton/);
   assert.doesNotMatch(layout, /Starter Project|codex-preview|_sites-preview/);
   assert.doesNotMatch(packageJson, /react-loading-skeleton/);
+});
+
+test("reads and writes workbench data through the mounted data API", async () => {
+  const data = {
+    tasks: [],
+    projects: [{ id: "p1", name: "Mounted data", log: [] }],
+    events: [],
+  };
+
+  const writeResponse = await requestWorkbench("PUT", { data });
+  assert.equal(writeResponse.status, 200);
+  assert.deepEqual(await writeResponse.json(), { ok: true });
+
+  const readResponse = await requestWorkbench("GET");
+  assert.equal(readResponse.status, 200);
+  assert.deepEqual(await readResponse.json(), { data });
 });

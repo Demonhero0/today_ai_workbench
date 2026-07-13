@@ -181,6 +181,21 @@ label {
   letter-spacing: 0;
 }
 
+.save-state {
+  display: inline-flex;
+  margin-top: 9px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.save-state.error {
+  color: var(--red);
+}
+
+.save-state.saved {
+  color: var(--green);
+}
+
 .capture {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;

@@ -3,10 +3,9 @@
 A local-first personal workbench for schedules, tasks, parallel project tracking,
 and lightweight review.
 
-The app is intended to run in Docker so Node dependencies, framework caches, and
-runtime state stay out of the host project directory. The default Compose setup
-builds an image from the repository source and runs the built app without
-mounting the project folder into the container.
+The app is intended to run in Docker. The image provides the Node runtime and
+the built AI workbench app. Personal workbench data is not baked into the image:
+Compose mounts an external data directory at `/data`.
 
 ## Prerequisites
 
@@ -46,12 +45,31 @@ npm run docker:test
 
 ## Host Cleanliness
 
-The default Docker flow does not bind-mount the repository into the container.
-The image is built from scratch using `package-lock.json`, runs `npm ci` inside
-the image build, then runs the compiled app from the final image.
+The default Docker flow does not bind-mount the repository source into the
+running container. The image is built from scratch using `package-lock.json`,
+runs `npm ci` inside the image build, then runs the compiled app from the final
+image.
 
 `.dockerignore` excludes host-only directories such as `node_modules`, `dist`,
 `.vinext`, and `.wrangler`, so they cannot accidentally leak into the image.
+
+## Personal Data
+
+Compose mounts this host directory into the container:
+
+```text
+../ai-workbench-data -> /data
+```
+
+The app reads and writes:
+
+```text
+/data/workbench.json
+```
+
+That means the app image and your personal data are separate. You can rebuild or
+replace the AI workbench image without baking your private task/project data
+into the image.
 
 ## Useful Files
 

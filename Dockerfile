@@ -28,8 +28,10 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV WORKBENCH_DATA_FILE=/data/workbench.json
 ENV WRANGLER_LOG_PATH=/tmp/wrangler.log
 
+# These files come from Docker build stages, not from host node_modules.
 COPY --from=builder /app/package.json ./package.json
 COPY --from=builder /app/package-lock.json ./package-lock.json
 COPY --from=builder /app/node_modules ./node_modules
