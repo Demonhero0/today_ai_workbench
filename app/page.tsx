@@ -26,7 +26,6 @@ type Project = {
   goal: string;
   phase: string;
   status: "active" | "waiting" | "slow" | "healthy";
-  progress: number;
   updatedAt: string;
   nextAction: string;
   log: string[];
@@ -59,7 +58,6 @@ const starterData: WorkbenchData = {
       goal: "临时收纳还没有项目归属的任务",
       phase: "收件箱",
       status: "active",
-      progress: 0,
       updatedAt: "今天",
       nextAction: "把任务分配到具体项目",
       log: ["今天 · 用于收纳未归类任务"],
@@ -70,7 +68,6 @@ const starterData: WorkbenchData = {
       goal: "完成方案评审并收敛交付范围",
       phase: "冲刺中",
       status: "active",
-      progress: 78,
       updatedAt: "今天",
       nextAction: "完成方案第 3 版",
       log: ["今天 · 安排 90 分钟深度工作", "7/12 · 完成竞品对比", "7/11 · 收到客户补充需求"],
@@ -81,7 +78,6 @@ const starterData: WorkbenchData = {
       goal: "本周完成材料确认和照片规格核对",
       phase: "等待中",
       status: "waiting",
-      progress: 62,
       updatedAt: "5 天前",
       nextAction: "联系中介确认材料清单",
       log: ["今天 · 建议跟进中介清单", "7/10 · 记录照片规格待确认", "7/08 · 护照复印件已准备"],
@@ -92,7 +88,6 @@ const starterData: WorkbenchData = {
       goal: "完成课程第 4 章并沉淀笔记",
       phase: "慢推进",
       status: "slow",
-      progress: 34,
       updatedAt: "7 天前",
       nextAction: "阅读第 4 章 25 分钟",
       log: ["今天 · 建议生成 25 分钟任务", "7/06 · 完成第 3 章", "7/01 · 新增课程笔记"],
@@ -103,7 +98,6 @@ const starterData: WorkbenchData = {
       goal: "处理体检预约和保险资料",
       phase: "正常",
       status: "healthy",
-      progress: 48,
       updatedAt: "昨天",
       nextAction: "预约周五体检",
       log: ["昨天 · 整理保险资料", "7/09 · 记录体检可选时间"],
@@ -384,12 +378,6 @@ export default function Home() {
     return tasksForProject(projectId).filter((task) => task.status !== "done");
   }
 
-  function progressForProject(projectId: string) {
-    const tasks = tasksForProject(projectId);
-    if (!tasks.length) return 0;
-    return Math.round((tasks.filter((task) => task.status === "done").length / tasks.length) * 100);
-  }
-
   function nextTaskForProject(projectId: string) {
     return activeTasksForProject(projectId).sort((a, b) => priorityWeight[a.priority] - priorityWeight[b.priority])[0];
   }
@@ -397,17 +385,19 @@ export default function Home() {
   const selectedProjectTasks = selectedProject ? tasksForProject(selectedProject.id) : [];
   const selectedActiveTasks = selectedProjectTasks.filter((task) => task.status !== "done");
   const selectedDoneTasks = selectedProjectTasks.filter((task) => task.status === "done");
-  const selectedProgress = selectedProject ? progressForProject(selectedProject.id) : 0;
-  const selectedNextTask = selectedProject ? nextTaskForProject(selectedProject.id) : undefined;
   const weekDates = useMemo(() => weekDatesFor(todayLabel), []);
   const weekDateSet = useMemo(() => new Set(weekDates), [weekDates]);
   const weekSchedule = weekDates.map((date) => {
     const dayEvents = data.events
       .filter((event) => eventDate(event) === date)
       .sort((a, b) => a.startAt.localeCompare(b.startAt));
-    const dayTasks = activeTasks
+    const dayTasks = liveTasks
       .filter((task) => task.dueDate === date)
-      .sort((a, b) => priorityWeight[a.priority] - priorityWeight[b.priority]);
+      .sort((a, b) => {
+        if (a.status === "done" && b.status !== "done") return 1;
+        if (a.status !== "done" && b.status === "done") return -1;
+        return priorityWeight[a.priority] - priorityWeight[b.priority];
+      });
     const eventLoad = dayEvents.reduce((total, event) => total + eventMinutes(event), 0);
     const loadRatio = Math.min(100, Math.round((eventLoad / 420) * 100 + dayTasks.length * 10));
     return { date, events: dayEvents, tasks: dayTasks, eventLoad, loadRatio };
@@ -421,7 +411,7 @@ export default function Home() {
   const futureMeetings = data.events
     .filter((event) => event.kind === "meeting" && event.endAt >= `${todayLabel}T00:00`)
     .sort((a, b) => a.startAt.localeCompare(b.startAt));
-  const weekTaskCount = activeTasks.filter((task) => task.dueDate && weekDateSet.has(task.dueDate)).length;
+  const weekTaskCount = liveTasks.filter((task) => task.dueDate && weekDateSet.has(task.dueDate)).length;
   const weekMeetingCount = data.events.filter((event) => event.kind === "meeting" && weekDateSet.has(eventDate(event))).length;
 
   const suggestions = [
@@ -531,7 +521,6 @@ export default function Home() {
       goal: projectGoal.trim() || "先明确目标和下一步动作",
       phase: "刚开始",
       status: "active",
-      progress: 8,
       updatedAt: "刚刚",
       nextAction: "写下第一个可执行动作",
       log: ["刚刚 · 新建项目"],
@@ -779,9 +768,9 @@ export default function Home() {
                         </button>
                       ))}
                       {day.tasks.map((task) => (
-                        <button className={`week-item todo ${task.priority}`} key={task.id} type="button" onClick={() => setSelectedProjectId(task.projectId)}>
+                        <button className={`week-item todo ${task.priority} ${task.status === "done" ? "done" : ""}`} key={task.id} type="button" onClick={() => setSelectedProjectId(task.projectId)}>
                           <strong>{task.title}</strong>
-                          <span>Todo · {projectsById[task.projectId]?.name ?? "Inbox / 未归类"}</span>
+                          <span>{task.status === "done" ? "已完成" : "Todo"} · {projectsById[task.projectId]?.name ?? "Inbox / 未归类"}</span>
                         </button>
                       ))}
                       {!day.events.length && !day.tasks.length && <p className="empty-state">暂无安排</p>}
@@ -920,7 +909,6 @@ export default function Home() {
               <div className="project-list">
                 {visibleProjects.map((project) => {
                   const activeCount = activeTasksForProject(project.id).length;
-                  const progress = progressForProject(project.id);
                   const nextTask = nextTaskForProject(project.id);
                   return (
                     <button
@@ -934,8 +922,6 @@ export default function Home() {
                         <small>{project.phase} · {activeCount} 个未完成</small>
                         <small>下一步：{nextTask?.title ?? "暂无"}</small>
                       </span>
-                      <em>{progress}%</em>
-                      <i style={{ width: `${progress}%` }} />
                     </button>
                   );
                 })}
@@ -945,7 +931,7 @@ export default function Home() {
             <section className="panel project-todo-panel">
               <div className="panel-head">
                 <h2>项目 Todo</h2>
-                <span>{selectedProject.name} · {selectedActiveTasks.length} 个未完成 · {selectedProgress}%</span>
+                <span>{selectedProject.name} · {selectedActiveTasks.length} 个未完成</span>
               </div>
               <form className="task-composer" onSubmit={addTaskToProject}>
                 <label>
