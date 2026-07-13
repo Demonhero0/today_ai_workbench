@@ -432,6 +432,9 @@ export default function Home() {
       .filter((event) => event.kind === "meeting" && eventDate(event) === date)
       .sort((a, b) => a.startAt.localeCompare(b.startAt)),
   }));
+  const futureMeetings = data.events
+    .filter((event) => event.kind === "meeting" && event.endAt >= `${todayLabel}T00:00`)
+    .sort((a, b) => a.startAt.localeCompare(b.startAt));
   const weekTaskCount = activeTasks.filter((task) => task.dueDate && weekDateSet.has(task.dueDate)).length;
   const weekMeetingCount = data.events.filter((event) => event.kind === "meeting" && weekDateSet.has(eventDate(event))).length;
 
@@ -451,6 +454,13 @@ export default function Home() {
     setData((current) => ({
       ...current,
       tasks: current.tasks.map((task) => (task.id === taskId ? { ...task, ...patch } : task)),
+    }));
+  }
+
+  function updateEvent(eventId: string, patch: Partial<CalendarEvent>) {
+    setData((current) => ({
+      ...current,
+      events: current.events.map((event) => (event.id === eventId ? { ...event, ...patch } : event)),
     }));
   }
 
@@ -699,7 +709,7 @@ export default function Home() {
               </div>
             </section>
           </div>
-        ) : (
+        ) : view === "today" ? (
           <>
             <header className="hero">
               <div>
@@ -727,7 +737,7 @@ export default function Home() {
               <Metric label="已完成" value={doneTasks.length.toString()} hint="今日沉淀进展" />
             </section>
           </>
-        )}
+        ) : null}
 
         {view === "today" && (
           <div className="dashboard-grid">
@@ -876,17 +886,42 @@ export default function Home() {
                 ))}
               </div>
             </section>
+
+            <section className="panel wide">
+              <div className="panel-head">
+                <h2>未来会议总表</h2>
+                <span>{futureMeetings.length} 个未结束会议</span>
+              </div>
+              <div className="meeting-table">
+                {futureMeetings.map((event) => (
+                  <article className="meeting-row" key={event.id}>
+                    <div>
+                      <strong>{event.title}</strong>
+                      <p>
+                        <em className="time-chip">{eventDate(event)} {eventTimeRange(event)}</em>
+                        {projectsById[event.projectId]?.name ?? "Inbox / 未归类"}
+                      </p>
+                    </div>
+                    <label>
+                      会议备注
+                      <textarea value={event.note} onChange={(inputEvent) => updateEvent(event.id, { note: inputEvent.target.value })} placeholder="会议中随手记录结论、待跟进事项或纪要" />
+                    </label>
+                  </article>
+                ))}
+                {!futureMeetings.length && <p className="empty-state">还没有未来会议。</p>}
+              </div>
+            </section>
           </div>
         )}
 
         {view === "projects" && selectedProject && (
-          <div className="dashboard-grid">
-            <section className="panel">
+          <div className="project-page">
+            <section className="panel project-create-panel">
               <div className="panel-head">
-                <h2>项目看板</h2>
+                <h2>创建项目</h2>
                 <span>{realProjects.length} 个项目 · {inboxTasks.length} 个未归类</span>
               </div>
-              <form className="project-composer" onSubmit={addProject}>
+              <form className="project-composer inline" onSubmit={addProject}>
                 <label>
                   新项目
                   <input value={projectName} onChange={(event) => setProjectName(event.target.value)} placeholder="例如：搬家计划" />
@@ -897,6 +932,14 @@ export default function Home() {
                 </label>
                 <button type="submit">添加项目</button>
               </form>
+            </section>
+
+            <div className="project-workspace">
+              <section className="panel project-board">
+              <div className="panel-head">
+                <h2>项目看板</h2>
+                <span>{selectedProject.name}</span>
+              </div>
               <div className="project-list">
                 {visibleProjects.map((project) => {
                   const activeCount = activeTasksForProject(project.id).length;
@@ -922,28 +965,10 @@ export default function Home() {
               </div>
             </section>
 
-            <section className="panel">
-              <div className="panel-head">
-                <h2>{selectedProject.name}</h2>
-                <span>{selectedActiveTasks.length} 个未完成 · {selectedProgress}%</span>
-              </div>
-              <label>
-                目标
-                <input value={selectedProject.goal} onChange={(event) => updateProject(selectedProject.id, { goal: event.target.value, updatedAt: "刚刚" })} />
-              </label>
-              <div className="next-action">
-                <span>下一步</span>
-                <strong>{selectedNextTask?.title ?? "先添加一个 Todo"}</strong>
-              </div>
-              <div className="progress-track" aria-label="项目进度">
-                <span style={{ width: `${selectedProgress}%` }} />
-              </div>
-            </section>
-
-            <section className="panel wide">
+            <section className="panel project-todo-panel">
               <div className="panel-head">
                 <h2>项目 Todo</h2>
-                <span>{selectedProject.name}</span>
+                <span>{selectedProject.name} · {selectedActiveTasks.length} 个未完成 · {selectedProgress}%</span>
               </div>
               <form className="task-composer" onSubmit={addTaskToProject}>
                 <label>
@@ -988,40 +1013,26 @@ export default function Home() {
                 ))}
                 {!selectedActiveTasks.length && <p className="empty-state">这个项目暂时没有未完成 Todo。</p>}
               </div>
-            </section>
 
-            <section className="panel wide">
-              <div className="panel-head">
-                <h2>已完成</h2>
-                <span>{selectedDoneTasks.length} 个</span>
-              </div>
-              <div className="task-list compact">
-                {selectedDoneTasks.map((task) => (
-                  <TaskRow
-                    key={task.id}
-                    task={task}
-                    projects={visibleProjects}
-                    projectsById={projectsById}
-                    onDelete={deleteTask}
-                    onUpdate={updateTask}
-                    deleteLabel="移入回收站"
-                  />
-                ))}
-                {!selectedDoneTasks.length && <p className="empty-state">还没有完成项。</p>}
-              </div>
+              <details className="done-section">
+                <summary>已完成 {selectedDoneTasks.length} 个</summary>
+                <div className="task-list compact">
+                  {selectedDoneTasks.map((task) => (
+                    <TaskRow
+                      key={task.id}
+                      task={task}
+                      projects={visibleProjects}
+                      projectsById={projectsById}
+                      onDelete={deleteTask}
+                      onUpdate={updateTask}
+                      deleteLabel="移入回收站"
+                    />
+                  ))}
+                  {!selectedDoneTasks.length && <p className="empty-state">还没有完成项。</p>}
+                </div>
+              </details>
             </section>
-
-            <section className="panel wide">
-              <div className="panel-head">
-                <h2>项目时间线</h2>
-                <span>自动沉淀变化</span>
-              </div>
-              <ul className="log-list">
-                {selectedProject.log.map((item) => (
-                  <li key={item}>{item}</li>
-                ))}
-              </ul>
-            </section>
+            </div>
           </div>
         )}
 
