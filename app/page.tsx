@@ -776,14 +776,12 @@ export default function Home() {
                         <button className={`week-item ${event.kind}`} key={event.id} type="button" onClick={() => setSelectedProjectId(event.projectId)}>
                           <strong>{event.title}</strong>
                           <span><em className="time-chip">{eventTimeRange(event)}</em> {projectsById[event.projectId]?.name ?? "Inbox / 未归类"}</span>
-                          {event.note && <small>{event.note}</small>}
                         </button>
                       ))}
                       {day.tasks.map((task) => (
                         <button className={`week-item todo ${task.priority}`} key={task.id} type="button" onClick={() => setSelectedProjectId(task.projectId)}>
                           <strong>{task.title}</strong>
                           <span>Todo · {projectsById[task.projectId]?.name ?? "Inbox / 未归类"}</span>
-                          {task.note && <small>{task.note}</small>}
                         </button>
                       ))}
                       {!day.events.length && !day.tasks.length && <p className="empty-state">暂无安排</p>}
@@ -857,7 +855,6 @@ export default function Home() {
                         <button className="week-item meeting" key={event.id} type="button" onClick={() => setSelectedProjectId(event.projectId)}>
                           <strong>{event.title}</strong>
                           <span><em className="time-chip">{eventTimeRange(event)}</em> {projectsById[event.projectId]?.name ?? "Inbox / 未归类"}</span>
-                          {event.note && <small>{event.note}</small>}
                         </button>
                       ))}
                       {!day.events.length && <p className="empty-state">暂无会议</p>}
