@@ -95,7 +95,7 @@ export async function POST(request: Request) {
       body: JSON.stringify({
         model: openAiModel,
         messages,
-        temperature: 0.3,
+        temperature: 1,
       }),
     });
 

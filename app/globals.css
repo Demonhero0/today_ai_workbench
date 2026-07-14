@@ -229,6 +229,12 @@ label {
   gap: 12px;
 }
 
+.sidebar-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
 .metric,
 .panel {
   background: rgba(251, 250, 247, 0.88);
@@ -251,6 +257,22 @@ label {
 .metric strong {
   font-size: 30px;
   line-height: 1.1;
+}
+
+.sidebar-metrics .metric {
+  gap: 1px;
+  padding: 10px;
+  box-shadow: none;
+  border-radius: 10px;
+}
+
+.sidebar-metrics .metric strong {
+  font-size: 22px;
+}
+
+.sidebar-metrics .metric small {
+  font-size: 12px;
+  overflow-wrap: anywhere;
 }
 
 .dashboard-grid {
@@ -508,9 +530,10 @@ label {
 
 .meeting-composer {
   display: grid;
-  grid-template-columns: minmax(190px, 1fr) minmax(136px, 0.48fr) minmax(104px, 0.32fr) minmax(104px, 0.32fr) minmax(150px, 0.52fr) minmax(160px, 0.58fr) auto;
+  grid-template-columns: repeat(auto-fit, minmax(min(140px, 100%), 1fr));
   gap: 10px;
   align-items: end;
+  min-width: 0;
   padding: 12px;
   border: 1px solid var(--line);
   border-radius: 10px;
@@ -523,6 +546,11 @@ label {
   padding: 0 14px;
   background: var(--accent);
   color: #fff;
+}
+
+.meeting-composer label:first-child,
+.meeting-composer label:last-of-type {
+  grid-column: 1 / -1;
 }
 
 .chat-log {
@@ -843,8 +871,9 @@ label {
 }
 
 .project-composer.inline {
-  grid-template-columns: minmax(220px, 0.8fr) minmax(280px, 1fr) auto;
+  grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr));
   align-items: end;
+  min-width: 0;
 }
 
 .project-workspace {
@@ -973,9 +1002,10 @@ label {
 
 .task-composer {
   display: grid;
-  grid-template-columns: minmax(240px, 1fr) minmax(150px, 0.42fr) minmax(110px, 0.3fr) minmax(180px, 0.62fr) auto;
+  grid-template-columns: repeat(auto-fit, minmax(min(140px, 100%), 1fr));
   gap: 10px;
   align-items: end;
+  min-width: 0;
   padding: 12px;
   border: 1px solid var(--line);
   border-radius: 10px;
@@ -983,7 +1013,7 @@ label {
 }
 
 .task-composer .task-note-field {
-  grid-column: 1 / -2;
+  grid-column: 1 / -1;
 }
 
 .task-composer button {

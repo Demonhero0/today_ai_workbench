@@ -701,6 +701,12 @@ export default function Home() {
             </button>
           ))}
         </nav>
+        <section className="sidebar-metrics" aria-label="工作台概览">
+          <Metric label="今日待办" value={activeTasks.length.toString()} hint={`${highPriorityTasks.length} 个高优先级`} />
+          <Metric label="项目" value={realProjects.length.toString()} hint={`${waitingProjects.length} 个需要关注`} />
+          <Metric label="Inbox" value={inboxTasks.length.toString()} hint="未归类任务" />
+          <Metric label="已完成" value={doneTasks.length.toString()} hint="沉淀进展" />
+        </section>
       </aside>
 
       <section className="content">
@@ -738,17 +744,32 @@ export default function Home() {
             </button>
             </header>
 
-            <section className="stats" aria-label="今日概览">
-              <Metric label="今日待办" value={activeTasks.length.toString()} hint={`${highPriorityTasks.length} 个高优先级`} />
-              <Metric label="项目" value={realProjects.length.toString()} hint={`${waitingProjects.length} 个需要关注`} />
-              <Metric label="Inbox" value={inboxTasks.length.toString()} hint="未归类任务" />
-              <Metric label="已完成" value={doneTasks.length.toString()} hint="今日沉淀进展" />
-            </section>
           </>
         ) : null}
 
         {view === "today" && (
           <div className="dashboard-grid">
+            <section className="panel wide">
+              <div className="panel-head">
+                <h2>AI Chat</h2>
+                <span>基于当前项目、Todo、会议和归档状态回答</span>
+              </div>
+              <div className="chat-log">
+                {chatMessages.map((message, index) => (
+                  <article className={`chat-message ${message.role}`} key={`${message.role}-${index}`}>
+                    <strong>{message.role === "user" ? "我" : "AI"}</strong>
+                    <p>{message.content}</p>
+                  </article>
+                ))}
+              </div>
+              <form className="chat-composer" onSubmit={sendChatMessage}>
+                <input value={chatInput} onChange={(event) => setChatInput(event.target.value)} placeholder="问问你的工作台，例如：这周哪个项目风险最高？" />
+                <button type="submit" disabled={aiState === "loading" || !chatInput.trim()}>
+                  发送
+                </button>
+              </form>
+            </section>
+
             <section className="panel">
               <div className="panel-head">
                 <h2>AI 今日建议</h2>
@@ -783,27 +804,6 @@ export default function Home() {
                   />
                 ))}
               </div>
-            </section>
-
-            <section className="panel wide">
-              <div className="panel-head">
-                <h2>AI Chat</h2>
-                <span>基于当前项目、Todo、会议和归档状态回答</span>
-              </div>
-              <div className="chat-log">
-                {chatMessages.map((message, index) => (
-                  <article className={`chat-message ${message.role}`} key={`${message.role}-${index}`}>
-                    <strong>{message.role === "user" ? "我" : "AI"}</strong>
-                    <p>{message.content}</p>
-                  </article>
-                ))}
-              </div>
-              <form className="chat-composer" onSubmit={sendChatMessage}>
-                <input value={chatInput} onChange={(event) => setChatInput(event.target.value)} placeholder="问问你的工作台，例如：这周哪个项目风险最高？" />
-                <button type="submit" disabled={aiState === "loading" || !chatInput.trim()}>
-                  发送
-                </button>
-              </form>
             </section>
 
             <section className="panel wide">
