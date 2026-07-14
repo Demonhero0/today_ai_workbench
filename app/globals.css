@@ -936,25 +936,33 @@ label {
 .project-page {
   display: grid;
   gap: 12px;
+  align-content: start;
 }
 
 .project-create-panel {
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: end;
+  grid-template-columns: minmax(180px, auto) minmax(0, 1fr);
+  align-items: center;
   gap: 12px;
   padding: 12px 14px;
   align-content: start;
 }
 
 .project-composer.inline {
-  grid-template-columns: minmax(180px, 0.55fr) minmax(220px, 1fr) auto;
+  grid-template-columns: minmax(220px, 0.42fr) minmax(260px, 1fr) auto;
   align-items: end;
   min-width: 0;
   padding: 8px;
 }
 
 .project-create-panel .panel-head {
-  align-content: end;
+  display: grid;
+  justify-content: start;
+  gap: 4px;
+  min-width: 0;
+}
+
+.project-create-panel .panel-head span {
+  white-space: nowrap;
 }
 
 .project-workspace {
@@ -1062,6 +1070,12 @@ label {
 .project-card span {
   display: grid;
   gap: 4px;
+  min-width: 0;
+}
+
+.project-card strong,
+.project-card small {
+  overflow-wrap: anywhere;
 }
 
 .next-action {

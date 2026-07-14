@@ -344,6 +344,14 @@ export default function Home() {
   const realProjects = visibleProjects.filter((project) => project.id !== inboxProjectId);
   const liveTasks = data.tasks.filter((task) => !task.deletedAt);
   const trashedTasks = data.tasks.filter((task) => task.deletedAt);
+  const todayQueueTasks = [...liveTasks].sort((a, b) => {
+    const dateA = a.dueDate || "9999-12-31";
+    const dateB = b.dueDate || "9999-12-31";
+    if (dateA !== dateB) return dateA.localeCompare(dateB);
+    if (a.status === "done" && b.status !== "done") return 1;
+    if (a.status !== "done" && b.status === "done") return -1;
+    return priorityWeight[a.priority] - priorityWeight[b.priority];
+  });
 
   const activeTasks = liveTasks.filter((task) => task.status !== "done");
   const highPriorityTasks = activeTasks.filter((task) => task.priority === "high");
@@ -852,7 +860,7 @@ export default function Home() {
                 <span>{activeTasks.length} 个未完成</span>
               </div>
               <div className="task-list">
-                {liveTasks.map((task) => (
+                {todayQueueTasks.map((task) => (
                   <TodayTaskRow
                     key={task.id}
                     task={task}
