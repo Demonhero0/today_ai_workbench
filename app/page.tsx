@@ -9,6 +9,12 @@ type View = "today" | "meetings" | "projects" | "trash";
 type EventKind = "meeting" | "focus" | "admin";
 type DetailTarget = { kind: "task" | "event"; id: string } | null;
 type ChatMessage = { role: "user" | "assistant"; content: string };
+type AiAction =
+  | { type: "create_project"; name: string; goal?: string }
+  | { type: "create_meeting"; title: string; date: string; start: string; end: string; project?: string; note?: string }
+  | { type: "create_task"; title: string; project?: string; dueDate?: string; priority?: Priority; note?: string }
+  | { type: "update_task_status"; title: string; status: TaskStatus };
+type AiPayload = { text?: string; suggestions?: string[]; actions?: AiAction[]; error?: string };
 
 type Task = {
   id: string;
@@ -54,110 +60,21 @@ type WorkbenchData = {
 const inboxProjectId = "inbox";
 const todayLabel = getTodayLabel();
 
+const inboxProject: Project = {
+  id: inboxProjectId,
+  name: "Inbox / 未归类",
+  goal: "临时收纳还没有项目归属的任务",
+  phase: "收件箱",
+  status: "active",
+  updatedAt: "今天",
+  nextAction: "把任务分配到具体项目",
+  log: ["今天 · 用于收纳未归类任务"],
+};
+
 const starterData: WorkbenchData = {
-  projects: [
-    {
-      id: inboxProjectId,
-      name: "Inbox / 未归类",
-      goal: "临时收纳还没有项目归属的任务",
-      phase: "收件箱",
-      status: "active",
-      updatedAt: "今天",
-      nextAction: "把任务分配到具体项目",
-      log: ["今天 · 用于收纳未归类任务"],
-    },
-    {
-      id: "client",
-      name: "客户项目",
-      goal: "完成方案评审并收敛交付范围",
-      phase: "冲刺中",
-      status: "active",
-      updatedAt: "今天",
-      nextAction: "完成方案第 3 版",
-      log: ["今天 · 安排 90 分钟深度工作", "7/12 · 完成竞品对比", "7/11 · 收到客户补充需求"],
-    },
-    {
-      id: "visa",
-      name: "签证办理",
-      goal: "本周完成材料确认和照片规格核对",
-      phase: "等待中",
-      status: "waiting",
-      updatedAt: "5 天前",
-      nextAction: "联系中介确认材料清单",
-      log: ["今天 · 建议跟进中介清单", "7/10 · 记录照片规格待确认", "7/08 · 护照复印件已准备"],
-    },
-    {
-      id: "learn",
-      name: "产品学习",
-      goal: "完成课程第 4 章并沉淀笔记",
-      phase: "慢推进",
-      status: "slow",
-      updatedAt: "7 天前",
-      nextAction: "阅读第 4 章 25 分钟",
-      log: ["今天 · 建议生成 25 分钟任务", "7/06 · 完成第 3 章", "7/01 · 新增课程笔记"],
-    },
-    {
-      id: "family",
-      name: "家庭事项",
-      goal: "处理体检预约和保险资料",
-      phase: "正常",
-      status: "healthy",
-      updatedAt: "昨天",
-      nextAction: "预约周五体检",
-      log: ["昨天 · 整理保险资料", "7/09 · 记录体检可选时间"],
-    },
-  ],
-  tasks: [
-    {
-      id: "t1",
-      title: "客户方案第 3 版",
-      projectId: "client",
-      due: "今天",
-      dueDate: todayLabel,
-      status: "doing",
-      priority: "high",
-      note: "需要先保护深度工作时段",
-      createdAt: todayLabel,
-    },
-    {
-      id: "t2",
-      title: "联系中介确认材料清单",
-      projectId: "visa",
-      due: "今天",
-      dueDate: todayLabel,
-      status: "todo",
-      priority: "medium",
-      note: "卡住签证办理进度",
-      createdAt: todayLabel,
-    },
-    {
-      id: "t3",
-      title: "整理照片规格和护照复印件",
-      projectId: "visa",
-      due: "周三",
-      dueDate: "2026-07-15",
-      status: "todo",
-      priority: "medium",
-      note: "可拆成短任务",
-      createdAt: todayLabel,
-    },
-    {
-      id: "t4",
-      title: "阅读产品课程第 4 章",
-      projectId: "learn",
-      due: "本周",
-      dueDate: "2026-07-17",
-      status: "todo",
-      priority: "low",
-      note: "建议放到晚间低压时段",
-      createdAt: todayLabel,
-    },
-  ],
-  events: [
-    { id: "e1", title: "客户方案深度工作", projectId: "client", startAt: `${todayLabel}T10:00`, endAt: `${todayLabel}T11:30`, kind: "focus", note: "保护一段不被打断的时间" },
-    { id: "e2", title: "项目同步", projectId: "client", startAt: `${todayLabel}T13:00`, endAt: `${todayLabel}T14:00`, kind: "meeting", note: "同步范围和风险" },
-    { id: "e3", title: "签证材料处理", projectId: "visa", startAt: "2026-07-15T16:00", endAt: "2026-07-15T16:30", kind: "admin", note: "和本周材料 Todo 放在一起看" },
-  ],
+  projects: [inboxProject],
+  tasks: [],
+  events: [],
 };
 
 const statusLabels: Record<TaskStatus, string> = {
@@ -188,7 +105,7 @@ function makeId(prefix: string) {
 
 function normalizeData(data: WorkbenchData): WorkbenchData {
   const hasInbox = data.projects.some((project) => project.id === inboxProjectId);
-  const projects = hasInbox ? data.projects : [starterData.projects[0], ...data.projects];
+  const projects = hasInbox ? data.projects : [inboxProject, ...data.projects];
   const projectIds = new Set(projects.map((project) => project.id));
   return {
     projects: projects.map((project) => ({
@@ -294,12 +211,32 @@ function eventMinutes(event: CalendarEvent) {
   return Math.max(0, Math.round((end - start) / 60000));
 }
 
+function normalizeInput(text?: string) {
+  return (text ?? "").trim().toLowerCase();
+}
+
+function coercePriority(value?: string): Priority {
+  return value === "high" || value === "low" || value === "medium" ? value : "medium";
+}
+
+function coerceStatus(value?: string): TaskStatus | null {
+  return value === "todo" || value === "doing" || value === "waiting" || value === "done" ? value : null;
+}
+
+function coerceDate(value?: string) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value ?? "") ? value ?? "" : todayLabel;
+}
+
+function coerceTime(value: string | undefined, fallback: string) {
+  return /^\d{2}:\d{2}$/.test(value ?? "") ? value ?? fallback : fallback;
+}
+
 export default function Home() {
   const [data, setData] = useState<WorkbenchData>(normalizeData(starterData));
   const [dataReady, setDataReady] = useState(false);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [view, setView] = useState<View>("today");
-  const [selectedProjectId, setSelectedProjectId] = useState("client");
+  const [selectedProjectId, setSelectedProjectId] = useState(inboxProjectId);
   const [projectName, setProjectName] = useState("");
   const [projectGoal, setProjectGoal] = useState("");
   const [newTaskTitle, setNewTaskTitle] = useState("");
@@ -310,12 +247,12 @@ export default function Home() {
   const [meetingDate, setMeetingDate] = useState(todayLabel);
   const [meetingStart, setMeetingStart] = useState("13:30");
   const [meetingEnd, setMeetingEnd] = useState("14:00");
-  const [meetingProjectId, setMeetingProjectId] = useState("client");
+  const [meetingProjectId, setMeetingProjectId] = useState(inboxProjectId);
   const [meetingNote, setMeetingNote] = useState("");
   const [detailTarget, setDetailTarget] = useState<DetailTarget>(null);
   const [aiState, setAiState] = useState<"idle" | "loading" | "error">("idle");
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
-    { role: "assistant", content: "你可以问我本周有什么风险、某个项目下一步是什么，或者让我们一起梳理你的个人工作台。" },
+    { role: "assistant", content: "你可以问我本周有什么风险，也可以直接说：创建项目、创建会议、添加 Todo，能执行的我会帮你写进今天。" },
   ]);
   const [chatInput, setChatInput] = useState("");
   const [timelineAnchorDate, setTimelineAnchorDate] = useState(todayLabel);
@@ -608,7 +545,133 @@ export default function Home() {
     setMeetingNote("");
   }
 
-  async function requestAi(mode: "suggestions" | "chat", message?: string, messages: ChatMessage[] = chatMessages) {
+  function applyAiActions(actions: AiAction[]) {
+    if (!actions.length) return "";
+
+    const nextData: WorkbenchData = {
+      projects: [...data.projects],
+      tasks: [...data.tasks],
+      events: [...data.events],
+    };
+    const applied: string[] = [];
+    let nextSelectedProjectId = selectedProjectId;
+    let nextView: View | null = null;
+
+    function projectByName(name?: string) {
+      const normalizedName = normalizeInput(name);
+      if (!normalizedName) return nextData.projects.find((project) => project.id === inboxProjectId) ?? inboxProject;
+      return (
+        nextData.projects.find((project) => normalizeInput(project.name) === normalizedName) ??
+        nextData.projects.find((project) => normalizeInput(project.name).includes(normalizedName)) ??
+        nextData.projects.find((project) => project.id === inboxProjectId) ??
+        inboxProject
+      );
+    }
+
+    function addProjectFromAction(name: string, goal?: string) {
+      const trimmedName = name.trim();
+      if (!trimmedName) return null;
+      const existingProject = nextData.projects.find((project) => normalizeInput(project.name) === normalizeInput(trimmedName));
+      if (existingProject) return existingProject;
+      const project: Project = {
+        id: makeId("project"),
+        name: trimmedName,
+        goal: goal?.trim() || "先明确目标和下一步动作",
+        phase: "刚开始",
+        status: "active",
+        updatedAt: "刚刚",
+        nextAction: "写下第一个可执行动作",
+        log: ["刚刚 · 由 AI 创建项目"],
+      };
+      const inbox = nextData.projects.find((item) => item.id === inboxProjectId);
+      const rest = nextData.projects.filter((item) => item.id !== inboxProjectId);
+      nextData.projects = inbox ? [inbox, project, ...rest] : [project, ...rest];
+      applied.push(`创建项目：${project.name}`);
+      nextSelectedProjectId = project.id;
+      nextView = "projects";
+      return project;
+    }
+
+    actions.forEach((action) => {
+      if (action.type === "create_project") {
+        addProjectFromAction(action.name, action.goal);
+        return;
+      }
+
+      if (action.type === "create_task") {
+        const title = action.title?.trim();
+        if (!title) return;
+        const project = projectByName(action.project);
+        const dueDate = action.dueDate && /^\d{4}-\d{2}-\d{2}$/.test(action.dueDate) ? action.dueDate : "";
+        const task: Task = {
+          id: makeId("task"),
+          title,
+          projectId: project.id,
+          due: dueDate || "未定",
+          dueDate,
+          status: "todo",
+          priority: coercePriority(action.priority),
+          note: action.note?.trim() ?? "",
+          createdAt: todayLabel,
+        };
+        nextData.tasks = [task, ...nextData.tasks];
+        nextData.projects = nextData.projects.map((item) =>
+          item.id === project.id
+            ? {
+                ...item,
+                updatedAt: "刚刚",
+                nextAction: task.title,
+                log: [`刚刚 · AI 新增 Todo：${task.title}`, ...item.log].slice(0, 5),
+              }
+            : item,
+        );
+        applied.push(`创建 Todo：${task.title}`);
+        nextSelectedProjectId = project.id;
+        nextView = "projects";
+        return;
+      }
+
+      if (action.type === "create_meeting") {
+        const title = action.title?.trim();
+        if (!title) return;
+        const date = coerceDate(action.date);
+        const start = coerceTime(action.start, "13:30");
+        const end = coerceTime(action.end, "14:00");
+        const project = projectByName(action.project);
+        const meeting: CalendarEvent = {
+          id: makeId("event"),
+          title,
+          projectId: project.id,
+          startAt: `${date}T${start}`,
+          endAt: `${date}T${end}`,
+          kind: "meeting",
+          note: action.note?.trim() ?? "",
+        };
+        nextData.events = [meeting, ...nextData.events];
+        applied.push(`创建会议：${meeting.title} ${date} ${start}-${end}`);
+        nextView = "meetings";
+        return;
+      }
+
+      if (action.type === "update_task_status") {
+        const status = coerceStatus(action.status);
+        const targetTitle = normalizeInput(action.title);
+        if (!status || !targetTitle) return;
+        const task = nextData.tasks.find((item) => !item.deletedAt && normalizeInput(item.title).includes(targetTitle));
+        if (!task) return;
+        nextData.tasks = nextData.tasks.map((item) => (item.id === task.id ? { ...item, status } : item));
+        applied.push(`更新 Todo 状态：${task.title} -> ${statusLabels[status]}`);
+      }
+    });
+
+    if (!applied.length) return "";
+    setData(normalizeData(nextData));
+    setSelectedProjectId(nextSelectedProjectId);
+    if (nextView) setView(nextView);
+    return `\n\n已执行：\n${applied.map((item) => `- ${item}`).join("\n")}`;
+  }
+
+  async function requestAi(mode: "suggestions" | "chat" | "command", message?: string, messages: ChatMessage[] = chatMessages) {
     setAiState("loading");
     try {
       const response = await fetch("/api/ai", {
@@ -616,7 +679,7 @@ export default function Home() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ mode, message, messages, data }),
       });
-      const payload = (await response.json()) as { text?: string; suggestions?: string[]; error?: string };
+      const payload = (await response.json()) as AiPayload;
       if (!response.ok) throw new Error(payload.error ?? "LLM 暂时不可用");
       setAiState("idle");
       return payload;
@@ -630,7 +693,7 @@ export default function Home() {
   async function analyzeTodayWithLlm() {
     const payload = await requestAi("suggestions");
     if (payload.error) {
-      setChatMessages((current) => [...current, { role: "assistant", content: `今日建议生成失败：${payload.error}` }]);
+      setChatMessages((current) => [...current, { role: "assistant", content: `今天建议生成失败：${payload.error}` }]);
       return;
     }
     const suggestions = payload.suggestions?.length ? payload.suggestions : localSuggestions;
@@ -638,7 +701,7 @@ export default function Home() {
       ...current,
       {
         role: "assistant",
-        content: `今日建议：\n${suggestions.map((suggestion) => `- ${suggestion}`).join("\n")}`,
+        content: `今天建议：\n${suggestions.map((suggestion) => `- ${suggestion}`).join("\n")}`,
       },
     ]);
   }
@@ -650,8 +713,9 @@ export default function Home() {
     const nextMessages: ChatMessage[] = [...chatMessages, { role: "user", content: message }];
     setChatMessages(nextMessages);
     setChatInput("");
-    const payload = await requestAi("chat", message, nextMessages);
-    setChatMessages((current) => [...current, { role: "assistant", content: payload.text ?? payload.error ?? "我这边暂时没拿到回复。" }]);
+    const payload = await requestAi("command", message, nextMessages);
+    const actionSummary = payload.actions?.length ? applyAiActions(payload.actions) : "";
+    setChatMessages((current) => [...current, { role: "assistant", content: `${payload.text ?? payload.error ?? "我这边暂时没拿到回复。"}${actionSummary}` }]);
   }
 
   useEffect(() => {
@@ -662,11 +726,6 @@ export default function Home() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dataReady]);
 
-  function resetDemo() {
-    setData(normalizeData(starterData));
-    setSelectedProjectId("client");
-  }
-
   const isTrashView = view === "trash";
 
   return (
@@ -675,13 +734,13 @@ export default function Home() {
         <div className="brand">
           <span className="brand-mark">A</span>
           <div>
-            <strong>AI 工作台</strong>
+            <strong>今天</strong>
             <small>个人状态图谱</small>
           </div>
         </div>
         <nav className="nav">
           {[
-            ["today", "今日"],
+            ["today", "今天"],
             ["meetings", `会议 ${currentWeekMeetingCount ? `(${currentWeekMeetingCount})` : ""}`],
             ["projects", "项目"],
             ["trash", `回收站 ${trashedTasks.length ? `(${trashedTasks.length})` : ""}`],
@@ -692,7 +751,7 @@ export default function Home() {
           ))}
         </nav>
         <section className="sidebar-metrics" aria-label="工作台概览">
-          <Metric label="今日待办" value={activeTasks.length.toString()} hint={`${highPriorityTasks.length} 个高优先级`} />
+          <Metric label="今天待办" value={activeTasks.length.toString()} hint={`${highPriorityTasks.length} 个高优先级`} />
           <Metric label="项目" value={realProjects.length.toString()} hint={`${waitingProjects.length} 个需要关注`} />
           <Metric label="Inbox" value={inboxTasks.length.toString()} hint="未归类任务" />
           <Metric label="已完成" value={doneTasks.length.toString()} hint="沉淀进展" />
@@ -729,9 +788,6 @@ export default function Home() {
                 <h1>今天把哪些事推进一点点？</h1>
                 <span className={`save-state ${saveState}`}>{dataReady ? saveStateLabels[saveState] : "正在读取挂载数据文件"}</span>
               </div>
-            <button className="secondary" type="button" onClick={resetDemo}>
-              重置演示数据
-            </button>
             </header>
 
           </>

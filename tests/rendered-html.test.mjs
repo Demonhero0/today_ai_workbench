@@ -52,8 +52,8 @@ test("server-renders the workbench shell", async () => {
   assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
 
   const html = await response.text();
-  assert.match(html, /<title>AI 个人工作台<\/title>/i);
-  assert.match(html, /AI 工作台/);
+  assert.match(html, /<title>今天<\/title>/i);
+  assert.match(html, /今天/);
   assert.match(html, /AI Chat/);
   assert.match(html, /基于当前项目、Todo、会议和归档状态回答/);
   assert.match(html, /任务队列/);

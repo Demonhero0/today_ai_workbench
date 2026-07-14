@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "AI 个人工作台",
-  description: "管理任务、项目和并行事项的个人工作台。",
+  title: "今天",
+  description: "管理任务、项目、会议和并行事项的个人工作台。",
   icons: {
     icon: "/favicon.svg",
     shortcut: "/favicon.svg",
