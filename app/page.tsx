@@ -586,7 +586,6 @@ export default function Home() {
     };
     const applied: string[] = [];
     let nextSelectedProjectId = selectedProjectId;
-    let nextView: View | null = null;
 
     function projectByName(name?: string) {
       const normalizedName = normalizeInput(name);
@@ -619,7 +618,6 @@ export default function Home() {
       nextData.projects = inbox ? [inbox, project, ...rest] : [project, ...rest];
       applied.push(`创建项目：${project.name}`);
       nextSelectedProjectId = project.id;
-      nextView = "projects";
       return project;
     }
 
@@ -658,7 +656,6 @@ export default function Home() {
         );
         applied.push(`创建 Todo：${task.title}`);
         nextSelectedProjectId = project.id;
-        nextView = "projects";
         return;
       }
 
@@ -680,7 +677,6 @@ export default function Home() {
         };
         nextData.events = [meeting, ...nextData.events];
         applied.push(`创建会议：${meeting.title} ${date} ${start}-${end}`);
-        nextView = "meetings";
         return;
       }
 
@@ -698,7 +694,6 @@ export default function Home() {
     if (!applied.length) return "";
     setData(normalizeData(nextData));
     setSelectedProjectId(nextSelectedProjectId);
-    if (nextView) setView(nextView);
     return `\n\n已执行：\n${applied.map((item) => `- ${item}`).join("\n")}`;
   }
 
