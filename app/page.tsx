@@ -1,7 +1,7 @@
 "use client";
 
 import type { FormEvent, ReactNode } from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 type TaskStatus = "todo" | "doing" | "waiting" | "done";
 type Priority = "high" | "medium" | "low";
@@ -312,17 +312,16 @@ export default function Home() {
   const [meetingEnd, setMeetingEnd] = useState("14:00");
   const [meetingProjectId, setMeetingProjectId] = useState("client");
   const [meetingNote, setMeetingNote] = useState("");
-  const [planApplied, setPlanApplied] = useState(false);
   const [detailTarget, setDetailTarget] = useState<DetailTarget>(null);
-  const [aiSuggestions, setAiSuggestions] = useState<string[]>([]);
   const [aiState, setAiState] = useState<"idle" | "loading" | "error">("idle");
-  const [aiError, setAiError] = useState("");
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
     { role: "assistant", content: "你可以问我本周有什么风险、某个项目下一步是什么，或者让我们一起梳理你的个人工作台。" },
   ]);
   const [chatInput, setChatInput] = useState("");
   const [timelineAnchorDate, setTimelineAnchorDate] = useState(todayLabel);
   const [meetingAnchorDate, setMeetingAnchorDate] = useState(todayLabel);
+  const chatEndRef = useRef<HTMLDivElement | null>(null);
+  const didAutoAnalyzeRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -370,6 +369,10 @@ export default function Home() {
 
     return () => window.clearTimeout(saveTimer);
   }, [data, dataReady]);
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [chatMessages, aiState]);
 
   const projectsById = useMemo(() => {
     return Object.fromEntries(data.projects.map((project) => [project.id, project]));
@@ -447,7 +450,6 @@ export default function Home() {
       ? `Inbox 里还有 ${inboxTasks.length} 个未归类任务，建议先分配到具体项目。`
       : "15:00-16:30 是今天最长空档，适合放 60 分钟以上的深度任务。",
   ];
-  const suggestions = aiSuggestions.length ? aiSuggestions : localSuggestions;
 
   function updateTask(taskId: string, patch: Partial<Task>) {
     setData((current) => ({
@@ -508,13 +510,6 @@ export default function Home() {
     setProjectGoal("");
     setSelectedProjectId(id);
     setView("projects");
-  }
-
-  function updateProject(projectId: string, patch: Partial<Project>) {
-    setData((current) => ({
-      ...current,
-      projects: current.projects.map((project) => (project.id === projectId ? { ...project, ...patch } : project)),
-    }));
   }
 
   function archiveProject(projectId: string) {
@@ -613,30 +608,8 @@ export default function Home() {
     setMeetingNote("");
   }
 
-  function applyPlan() {
-    const firstHigh = highPriorityTasks[0];
-    if (!firstHigh) return;
-    setData((current) => ({
-      ...current,
-      events: [
-        {
-          id: makeId("event"),
-          title: firstHigh.title,
-          projectId: firstHigh.projectId,
-          startAt: `${todayLabel}T15:00`,
-          endAt: `${todayLabel}T16:00`,
-          kind: "focus",
-          note: "由 AI 今日建议加入",
-        },
-        ...current.events,
-      ],
-    }));
-    setPlanApplied(true);
-  }
-
   async function requestAi(mode: "suggestions" | "chat", message?: string, messages: ChatMessage[] = chatMessages) {
     setAiState("loading");
-    setAiError("");
     try {
       const response = await fetch("/api/ai", {
         method: "POST",
@@ -650,14 +623,24 @@ export default function Home() {
     } catch (error) {
       const messageText = error instanceof Error ? error.message : "LLM 暂时不可用";
       setAiState("error");
-      setAiError(messageText);
       return { error: messageText };
     }
   }
 
   async function analyzeTodayWithLlm() {
     const payload = await requestAi("suggestions");
-    if (payload.suggestions?.length) setAiSuggestions(payload.suggestions);
+    if (payload.error) {
+      setChatMessages((current) => [...current, { role: "assistant", content: `今日建议生成失败：${payload.error}` }]);
+      return;
+    }
+    const suggestions = payload.suggestions?.length ? payload.suggestions : localSuggestions;
+    setChatMessages((current) => [
+      ...current,
+      {
+        role: "assistant",
+        content: `今日建议：\n${suggestions.map((suggestion) => `- ${suggestion}`).join("\n")}`,
+      },
+    ]);
   }
 
   async function sendChatMessage(event: FormEvent) {
@@ -671,10 +654,17 @@ export default function Home() {
     setChatMessages((current) => [...current, { role: "assistant", content: payload.text ?? payload.error ?? "我这边暂时没拿到回复。" }]);
   }
 
+  useEffect(() => {
+    if (!dataReady || didAutoAnalyzeRef.current) return;
+    didAutoAnalyzeRef.current = true;
+    void analyzeTodayWithLlm();
+    // Run once per page load; normal edits should not keep retriggering LLM calls.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dataReady]);
+
   function resetDemo() {
     setData(normalizeData(starterData));
     setSelectedProjectId("client");
-    setPlanApplied(false);
   }
 
   const isTrashView = view === "trash";
@@ -761,6 +751,13 @@ export default function Home() {
                     <p>{message.content}</p>
                   </article>
                 ))}
+                {aiState === "loading" && (
+                  <article className="chat-message assistant">
+                    <strong>AI</strong>
+                    <p>正在分析...</p>
+                  </article>
+                )}
+                <div ref={chatEndRef} />
               </div>
               <form className="chat-composer" onSubmit={sendChatMessage}>
                 <input value={chatInput} onChange={(event) => setChatInput(event.target.value)} placeholder="问问你的工作台，例如：这周哪个项目风险最高？" />
@@ -768,25 +765,6 @@ export default function Home() {
                   发送
                 </button>
               </form>
-            </section>
-
-            <section className="panel">
-              <div className="panel-head">
-                <h2>AI 今日建议</h2>
-                <button className="secondary" type="button" onClick={analyzeTodayWithLlm} disabled={aiState === "loading"}>
-                  {aiState === "loading" ? "分析中" : "LLM 分析"}
-                </button>
-              </div>
-              {aiError && <p className="notice error">{aiError}</p>}
-              {planApplied && <p className="notice">已把最高优先级任务放入 15:00 后的时间轴。</p>}
-              <ol className="suggestions">
-                {suggestions.map((suggestion) => (
-                  <li key={suggestion}>{suggestion}</li>
-                ))}
-              </ol>
-              <button className="secondary" type="button" onClick={applyPlan}>
-                把最高优先级 Todo 放入 15:00
-              </button>
             </section>
 
             <section className="panel">
@@ -806,7 +784,7 @@ export default function Home() {
               </div>
             </section>
 
-            <section className="panel wide">
+            <section className="panel">
               <div className="panel-head">
                 <div>
                   <h2>周时间轴</h2>
@@ -876,8 +854,8 @@ export default function Home() {
         )}
 
         {view === "meetings" && (
-          <div className="dashboard-grid">
-            <section className="panel wide">
+          <div className="dashboard-grid meetings-page">
+            <section className="panel wide compact-panel">
               <div className="panel-head">
                 <h2>创建会议</h2>
                 <span>{meetingWeekMeetingCount} 个当前周会议</span>
@@ -917,7 +895,7 @@ export default function Home() {
               </form>
             </section>
 
-            <section className="panel wide">
+            <section className="panel wide compact-panel">
               <div className="panel-head">
                 <div>
                   <h2>会议时间轴</h2>
