@@ -1,5 +1,6 @@
 const openAiApiKey = process.env.OPENAI_API_KEY;
 const openAiModel = process.env.OPENAI_MODEL ?? "gpt-4.1-mini";
+const openAiBaseUrl = (process.env.OPENAI_BASE_URL ?? "https://api.openai.com/v1").replace(/\/+$/, "");
 
 type ChatMessage = {
   role: "user" | "assistant";
@@ -7,6 +8,18 @@ type ChatMessage = {
 };
 
 function extractText(payload: unknown) {
+  const choices = payload && typeof payload === "object" && "choices" in payload && Array.isArray(payload.choices) ? payload.choices : [];
+  const chatText = choices
+    .map((choice) => {
+      if (!choice || typeof choice !== "object" || !("message" in choice)) return "";
+      const message = choice.message;
+      if (!message || typeof message !== "object" || !("content" in message)) return "";
+      return typeof message.content === "string" ? message.content : "";
+    })
+    .filter(Boolean)
+    .join("\n");
+  if (chatText) return chatText;
+
   if (payload && typeof payload === "object" && "output_text" in payload && typeof payload.output_text === "string") {
     return payload.output_text;
   }
@@ -50,9 +63,10 @@ export async function POST(request: Request) {
       "你是一个中文个人工作台助理。你只能基于用户提供的工作台 JSON、当前对话和明确可推断的信息回答。" +
       "不要编造不存在的项目、会议或 Todo。回答要短、具体、可执行。";
 
-    const input =
+    const messages =
       mode === "suggestions"
         ? [
+            { role: "system", content: instructions },
             {
               role: "user",
               content:
@@ -61,6 +75,7 @@ export async function POST(request: Request) {
             },
           ]
         : [
+            { role: "system", content: instructions },
             ...recentMessages.map((message) => ({
               role: message.role,
               content: message.content,
@@ -71,7 +86,7 @@ export async function POST(request: Request) {
             },
           ];
 
-    const response = await fetch("https://api.openai.com/v1/responses", {
+    const response = await fetch(`${openAiBaseUrl}/chat/completions`, {
       method: "POST",
       headers: {
         authorization: `Bearer ${openAiApiKey}`,
@@ -79,8 +94,7 @@ export async function POST(request: Request) {
       },
       body: JSON.stringify({
         model: openAiModel,
-        instructions,
-        input,
+        messages,
         temperature: 0.3,
       }),
     });

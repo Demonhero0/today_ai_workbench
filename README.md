@@ -24,17 +24,24 @@ http://localhost:3000
 
 ## LLM
 
-The chat and AI suggestions use OpenAI through environment variables. Create a
-local `.env` file next to `docker-compose.yml` or export these variables before
-starting Docker:
+The chat and AI suggestions use an OpenAI-compatible chat completions API
+through environment variables. Create a local `.env` file next to
+`docker-compose.yml` or export these variables before starting Docker.
 
 ```bash
-OPENAI_API_KEY=sk-...
-OPENAI_MODEL=gpt-4.1-mini
+cp .env.example .env
 ```
 
-The API key is read by the container at runtime. It is not written into
-`workbench.json`.
+For Kimi, `.env` should look like:
+
+```bash
+OPENAI_API_KEY=your-kimi-api-key
+OPENAI_BASE_URL=https://api.kimi.com/coding/v1
+OPENAI_MODEL=your-kimi-model-name
+```
+
+The API key is read by the container at runtime. It is ignored by Git and is not
+written into `workbench.json`.
 
 Stop the app:
 
