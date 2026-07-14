@@ -590,6 +590,14 @@ label {
   align-content: start;
 }
 
+.today-queue-panel .task-list {
+  min-height: 320px;
+  max-height: 440px;
+  overflow: auto;
+  align-content: start;
+  padding-right: 2px;
+}
+
 .chat-message {
   display: grid;
   gap: 4px;

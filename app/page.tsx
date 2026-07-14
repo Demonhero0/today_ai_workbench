@@ -346,16 +346,15 @@ export default function Home() {
   const realProjects = visibleProjects.filter((project) => project.id !== inboxProjectId);
   const liveTasks = data.tasks.filter((task) => !task.deletedAt);
   const trashedTasks = data.tasks.filter((task) => task.deletedAt);
-  const todayQueueTasks = [...liveTasks].sort((a, b) => {
+
+  const activeTasks = liveTasks.filter((task) => task.status !== "done");
+  const todayQueueTasks = [...activeTasks].sort((a, b) => {
     const dateA = a.dueDate || "9999-12-31";
     const dateB = b.dueDate || "9999-12-31";
     if (dateA !== dateB) return dateA.localeCompare(dateB);
-    if (a.status === "done" && b.status !== "done") return 1;
-    if (a.status !== "done" && b.status === "done") return -1;
     return priorityWeight[a.priority] - priorityWeight[b.priority];
   });
 
-  const activeTasks = liveTasks.filter((task) => task.status !== "done");
   const highPriorityTasks = activeTasks.filter((task) => task.priority === "high");
   const waitingProjects = realProjects.filter((project) => project.status === "waiting" || project.status === "slow");
   const doneTasks = liveTasks.filter((task) => task.status === "done");
