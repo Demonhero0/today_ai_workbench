@@ -1,6 +1,6 @@
 "use client";
 
-import type { FormEvent, ReactNode } from "react";
+import type { DragEvent, FormEvent, ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 type TaskStatus = "todo" | "doing" | "waiting" | "done";
@@ -10,6 +10,7 @@ type EventKind = "meeting" | "focus" | "admin";
 type DetailTarget = { kind: "task" | "event"; id: string } | null;
 type ChatMessage = { role: "user" | "assistant"; content: string };
 type TimelineScale = "week" | "month";
+type TimelineDragItem = { kind: "task" | "event"; id: string };
 type AiAction =
   | { type: "create_project"; name: string; goal?: string }
   | { type: "create_meeting"; title: string; date: string; start: string; end: string; project?: string; note?: string }
@@ -280,6 +281,7 @@ export default function Home() {
   const [meetingAnchorDate, setMeetingAnchorDate] = useState(todayLabel);
   const [timelineScale, setTimelineScale] = useState<TimelineScale>("week");
   const [meetingScale, setMeetingScale] = useState<TimelineScale>("week");
+  const [dragOverDate, setDragOverDate] = useState("");
   const chatEndRef = useRef<HTMLDivElement | null>(null);
   const didAutoAnalyzeRef = useRef(false);
 
@@ -431,6 +433,47 @@ export default function Home() {
       ...current,
       events: current.events.map((event) => (event.id === eventId ? { ...event, ...patch } : event)),
     }));
+  }
+
+  function startTimelineDrag(event: DragEvent, item: TimelineDragItem) {
+    const payload = JSON.stringify(item);
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("application/json", payload);
+    event.dataTransfer.setData("text/plain", payload);
+  }
+
+  function handleTimelineDragOver(event: DragEvent, date: string) {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+    if (dragOverDate !== date) setDragOverDate(date);
+  }
+
+  function leaveTimelineDay(event: DragEvent, date: string) {
+    const nextTarget = event.relatedTarget;
+    if (nextTarget instanceof Node && event.currentTarget.contains(nextTarget)) return;
+    if (dragOverDate === date) setDragOverDate("");
+  }
+
+  function dropTimelineItem(event: DragEvent, date: string) {
+    event.preventDefault();
+    setDragOverDate("");
+    try {
+      const item = JSON.parse(event.dataTransfer.getData("application/json") || event.dataTransfer.getData("text/plain")) as TimelineDragItem;
+      if (item.kind === "task") {
+        updateTask(item.id, { dueDate: date, due: date });
+        return;
+      }
+      if (item.kind === "event") {
+        const targetEvent = data.events.find((calendarEvent) => calendarEvent.id === item.id);
+        if (!targetEvent) return;
+        updateEvent(item.id, {
+          startAt: `${date}T${targetEvent.startAt.slice(11, 16)}`,
+          endAt: `${date}T${targetEvent.endAt.slice(11, 16)}`,
+        });
+      }
+    } catch {
+      setDragOverDate("");
+    }
   }
 
   function deleteTask(taskId: string) {
@@ -893,7 +936,13 @@ export default function Home() {
               </div>
               <div className={`week-timeline ${timelineScale === "month" ? "month-view" : ""}`}>
                 {weekSchedule.map((day) => (
-                  <article className={`week-day ${day.date === todayLabel ? "today" : ""}`} key={day.date}>
+                  <article
+                    className={`week-day ${day.date === todayLabel ? "today" : ""} ${dragOverDate === day.date ? "drag-over" : ""}`}
+                    key={day.date}
+                    onDragOver={(event) => handleTimelineDragOver(event, day.date)}
+                    onDragLeave={(event) => leaveTimelineDay(event, day.date)}
+                    onDrop={(event) => dropTimelineItem(event, day.date)}
+                  >
                     <header>
                       <div>
                         <strong>{formatWeekDay(day.date)}</strong>
@@ -908,8 +957,11 @@ export default function Home() {
                       {day.events.map((event) => (
                         <button
                           className={`week-item ${event.kind}`}
+                          draggable
                           key={event.id}
                           type="button"
+                          onDragStart={(dragEvent) => startTimelineDrag(dragEvent, { kind: "event", id: event.id })}
+                          onDragEnd={() => setDragOverDate("")}
                           onClick={() => {
                             setSelectedProjectId(event.projectId);
                             setDetailTarget({ kind: "event", id: event.id });
@@ -922,8 +974,11 @@ export default function Home() {
                       {day.tasks.map((task) => (
                         <button
                           className={`week-item todo ${task.priority} ${task.status === "done" ? "done" : ""}`}
+                          draggable
                           key={task.id}
                           type="button"
+                          onDragStart={(dragEvent) => startTimelineDrag(dragEvent, { kind: "task", id: task.id })}
+                          onDragEnd={() => setDragOverDate("")}
                           onClick={() => {
                             setSelectedProjectId(task.projectId);
                             setDetailTarget({ kind: "task", id: task.id });
@@ -1010,7 +1065,13 @@ export default function Home() {
               </div>
               <div className={`week-timeline ${meetingScale === "month" ? "month-view" : ""}`}>
                 {meetingSchedule.map((day) => (
-                  <article className={`week-day ${day.date === todayLabel ? "today" : ""}`} key={day.date}>
+                  <article
+                    className={`week-day ${day.date === todayLabel ? "today" : ""} ${dragOverDate === day.date ? "drag-over" : ""}`}
+                    key={day.date}
+                    onDragOver={(event) => handleTimelineDragOver(event, day.date)}
+                    onDragLeave={(event) => leaveTimelineDay(event, day.date)}
+                    onDrop={(event) => dropTimelineItem(event, day.date)}
+                  >
                     <header>
                       <div>
                         <strong>{formatWeekDay(day.date)}</strong>
@@ -1022,8 +1083,11 @@ export default function Home() {
                       {day.events.map((event) => (
                         <button
                           className="week-item meeting"
+                          draggable
                           key={event.id}
                           type="button"
+                          onDragStart={(dragEvent) => startTimelineDrag(dragEvent, { kind: "event", id: event.id })}
+                          onDragEnd={() => setDragOverDate("")}
                           onClick={() => {
                             setSelectedProjectId(event.projectId);
                             setDetailTarget({ kind: "event", id: event.id });
