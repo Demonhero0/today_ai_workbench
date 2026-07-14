@@ -1,38 +1,37 @@
-# AI Personal Workbench
+# 今天 AI Workbench
 
-A local-first personal workbench for tasks and parallel project tracking.
+一个本地优先的个人工作台，用来管理项目、Todo、会议，以及通过 AI Chat 查询和维护这些信息。
 
-The app is intended to run in Docker. The image provides the Node runtime and
-the built AI workbench app. Personal workbench data is not baked into the image:
-Compose mounts an external data directory at `/data`.
+应用默认通过 Docker 运行。Docker 镜像只提供运行环境和应用代码；个人数据保存在宿主机挂载目录里，不会被打进镜像。
 
-## Prerequisites
+## 功能概览
 
-- Docker Desktop or another Docker runtime with Compose support
+- 项目管理：创建项目、归档项目、按项目维护 Todo。
+- Todo 管理：设置截止日期、状态、优先级和备注。
+- 会议管理：创建会议，记录起止时间、关联项目和会议备注。
+- 今天视图：AI Chat、未完成任务队列、周/月时间轴。
+- 时间轴拖拽：把 Todo 或会议拖到某一天即可调整日期。
+- AI Chat：支持查询工作台，也支持用自然语言创建项目、创建会议、添加 Todo、更新 Todo 状态。
+- 本地数据：工作台数据写入挂载的 `workbench.json`。
 
-## Run
+## 快速开始
+
+### 1. 克隆仓库
 
 ```bash
-npm run docker:up
+git clone git@github.com:Demonhero0/today_ai_workbench.git
+cd today_ai_workbench
 ```
 
-Open:
+### 2. 配置 LLM
 
-```text
-http://localhost:3000
-```
-
-## LLM
-
-The chat and AI suggestions use an OpenAI-compatible chat completions API
-through environment variables. Create a local `.env` file next to
-`docker-compose.yml` or export these variables before starting Docker.
+复制环境变量模板：
 
 ```bash
 cp .env.example .env
 ```
 
-For Kimi, `.env` should look like:
+如果使用 Kimi，`.env` 类似这样：
 
 ```bash
 OPENAI_API_KEY=your-kimi-api-key
@@ -40,61 +39,251 @@ OPENAI_BASE_URL=https://api.kimi.com/coding/v1
 OPENAI_MODEL=your-kimi-model-name
 ```
 
-The API key is read by the container at runtime. It is ignored by Git and is not
-written into `workbench.json`.
+也可以使用其他兼容 OpenAI Chat Completions 的服务，只要配置：
 
-Stop the app:
+```bash
+OPENAI_API_KEY=your-api-key
+OPENAI_BASE_URL=https://your-compatible-api/v1
+OPENAI_MODEL=your-model-name
+```
+
+`.env` 已被 Git 忽略，不要提交真实 key。
+
+### 3. 启动
+
+```bash
+npm run docker:up
+```
+
+打开浏览器访问：
+
+```text
+http://localhost:3000
+```
+
+### 4. 停止
 
 ```bash
 npm run docker:down
 ```
 
-## Verify
+## 数据保存在哪里
 
-Build the Docker image:
-
-```bash
-npm run docker:build
-```
-
-Run the build and rendered HTML test inside Docker:
-
-```bash
-npm run docker:test
-```
-
-## Host Cleanliness
-
-The default Docker flow does not bind-mount the repository source into the
-running container. The image is built from scratch using `package-lock.json`,
-runs `npm ci` inside the image build, then runs the compiled app from the final
-image.
-
-`.dockerignore` excludes host-only directories such as `node_modules`, `dist`,
-`.vinext`, and `.wrangler`, so they cannot accidentally leak into the image.
-
-## Personal Data
-
-Compose mounts this host directory into the container:
+`docker-compose.yml` 会把宿主机目录挂载到容器的 `/data`：
 
 ```text
 ../ai-workbench-data -> /data
 ```
 
-The app reads and writes:
+应用读写的数据文件是：
 
 ```text
 /data/workbench.json
 ```
 
-That means the app image and your personal data are separate. You can rebuild or
-replace the AI workbench image without baking your private task/project data
-into the image.
+也就是说，实际文件在仓库的上一级目录：
 
-## Useful Files
+```text
+../ai-workbench-data/workbench.json
+```
 
-- `app/page.tsx`: the interactive workbench UI and local state logic
-- `app/globals.css`: product styling
-- `Dockerfile`: container image definition
-- `docker-compose.yml`: local Docker runtime
-- `.dockerignore`: keeps host dependencies and build output out of the image
+这样做的好处是：
+
+- 个人数据不会进入 Docker 镜像。
+- 重新构建镜像不会丢失数据。
+- 可以单独备份 `workbench.json`。
+
+## AI Chat 能做什么
+
+AI Chat 会读取当前工作台 JSON，并结合当前上海时间回答问题。它也可以把一些自然语言指令转换成安全的白名单动作。
+
+示例：
+
+```text
+创建项目：论文阅读，目标是整理 DeFi 相关论文
+```
+
+```text
+给论文阅读添加 Todo：读完 BCRA 论文，截止到 2026-07-16
+```
+
+```text
+明天 10:00 到 11:00 创建会议：项目同步会，关联多模态知识库
+```
+
+```text
+把“整理实验记录”标记为完成
+```
+
+当前允许 AI 执行的动作：
+
+- `create_project`
+- `create_task`
+- `create_meeting`
+- `update_task_status`
+
+AI 不会直接写文件，也不会执行任意代码。后端只让模型返回结构化动作，前端再按白名单更新工作台数据。
+
+## 使用建议
+
+### 项目
+
+项目适合承载一组长期推进的事项，例如论文阅读、产品开发、搬家计划。每个项目可以维护自己的 Todo，项目也可以归档。
+
+### Todo
+
+Todo 只需要维护必要信息：
+
+- 标题
+- 截止日期
+- 状态
+- 优先级
+- 备注
+
+“今天”页任务队列只显示未完成 Todo，并按截止日期正序排列。已完成 Todo 仍会保留在时间轴里，方便回顾。
+
+### 会议
+
+会议包含：
+
+- 主题
+- 日期
+- 开始时间
+- 结束时间
+- 关联项目
+- 备注
+
+会议备注适合记录纪要、结论和后续跟进事项。
+
+### 时间轴
+
+今天页和会议页都支持周视图、月视图。
+
+可以直接拖动：
+
+- Todo 卡片到某一天：更新 Todo 截止日期。
+- 会议卡片到某一天：更新会议日期，保留原开始/结束时间。
+
+## 常用命令
+
+构建 Docker 镜像：
+
+```bash
+npm run docker:build
+```
+
+运行 Docker 构建和渲染测试：
+
+```bash
+npm run docker:test
+```
+
+停止容器：
+
+```bash
+npm run docker:down
+```
+
+本地开发模式：
+
+```bash
+npm install
+npm run dev
+```
+
+默认推荐 Docker 流程，因为它不会在宿主机全局安装依赖，也更接近实际运行环境。
+
+## 目录结构
+
+```text
+app/
+  api/
+    ai/route.ts          AI Chat 和指令解析接口
+    workbench/route.ts   workbench.json 读写接口
+  page.tsx               主界面和交互逻辑
+  globals.css            全局样式
+Dockerfile               多阶段 Docker 构建
+docker-compose.yml       本地运行配置
+.env.example             LLM 配置模板
+tests/                   渲染和数据 API 测试
+```
+
+## Docker 设计
+
+Dockerfile 使用多阶段构建：
+
+- `deps`：在镜像中执行 `npm ci` 安装依赖。
+- `builder`：复制源码并构建应用。
+- `test`：运行测试。
+- `runner`：只复制运行所需文件，启动生产服务。
+
+`.dockerignore` 会排除宿主机的 `node_modules`、构建产物和临时目录，避免污染镜像。
+
+## 排错
+
+### AI Chat 提示没有配置 key
+
+检查 `.env` 是否存在，并确认：
+
+```bash
+OPENAI_API_KEY=...
+OPENAI_BASE_URL=...
+OPENAI_MODEL=...
+```
+
+修改 `.env` 后需要重启：
+
+```bash
+npm run docker:down
+npm run docker:up
+```
+
+### 端口 3000 被占用
+
+修改 `docker-compose.yml`：
+
+```yaml
+ports:
+  - "3001:3000"
+```
+
+然后访问：
+
+```text
+http://localhost:3001
+```
+
+### 想清空个人数据
+
+停止容器后删除或备份数据文件：
+
+```bash
+npm run docker:down
+rm ../ai-workbench-data/workbench.json
+```
+
+下次启动会重新创建一个空工作台。
+
+### 想备份个人数据
+
+备份这个文件即可：
+
+```text
+../ai-workbench-data/workbench.json
+```
+
+## 维护说明
+
+提交前建议至少运行：
+
+```bash
+npm run docker:test
+```
+
+如果已经有本地依赖，也可以运行：
+
+```bash
+npm run lint
+```
+
+如果不想在宿主机安装依赖，可以在 Docker 构建阶段完成验证。
