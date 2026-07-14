@@ -291,6 +291,19 @@ label {
   min-height: 34px;
 }
 
+.week-controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.week-controls .secondary {
+  min-height: 34px;
+  padding: 0 10px;
+}
+
 .panel h2 {
   margin: 0;
   font-size: 17px;

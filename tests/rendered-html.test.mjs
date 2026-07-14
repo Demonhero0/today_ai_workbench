@@ -60,7 +60,7 @@ test("server-renders the workbench shell", async () => {
   assert.match(html, /任务队列/);
   assert.match(html, /会议/);
   assert.match(html, /回收站/);
-  assert.match(html, /本周时间轴/);
+  assert.match(html, /周时间轴/);
 });
 
 test("does not keep starter preview code", async () => {

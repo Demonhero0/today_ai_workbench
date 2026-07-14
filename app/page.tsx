@@ -52,7 +52,7 @@ type WorkbenchData = {
 };
 
 const inboxProjectId = "inbox";
-const todayLabel = "2026-07-13";
+const todayLabel = getTodayLabel();
 
 const starterData: WorkbenchData = {
   projects: [
@@ -218,9 +218,8 @@ function normalizeData(data: WorkbenchData): WorkbenchData {
 
 function inferDueDate(text: string) {
   if (text.includes("今天")) return todayLabel;
-  if (text.includes("明天")) return "2026-07-14";
-  if (text.includes("周三") || text.includes("星期三")) return "2026-07-15";
-  if (text.includes("周五") || text.includes("星期五") || text.includes("本周")) return "2026-07-17";
+  if (text.includes("明天")) return addDays(todayLabel, 1);
+  if (text.includes("本周")) return weekDatesFor(todayLabel)[4];
   return "";
 }
 
@@ -239,6 +238,17 @@ function dateInputFromDate(date: Date) {
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
+}
+
+function getTodayLabel() {
+  const parts = new Intl.DateTimeFormat("zh-CN", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}`;
 }
 
 function dateFromInput(dateText: string) {
@@ -262,6 +272,12 @@ function formatWeekDay(dateText: string) {
   const date = dateFromInput(dateText);
   const weekdays = ["日", "一", "二", "三", "四", "五", "六"];
   return `${date.getMonth() + 1}/${date.getDate()} 周${weekdays[date.getDay()]}`;
+}
+
+function formatWeekRange(dates: string[]) {
+  const first = dates[0];
+  const last = dates[dates.length - 1];
+  return `${first.slice(5)} 至 ${last.slice(5)}`;
 }
 
 function eventDate(event: CalendarEvent) {
@@ -305,6 +321,8 @@ export default function Home() {
     { role: "assistant", content: "你可以问我本周有什么风险、某个项目下一步是什么，或者让我们一起梳理你的个人工作台。" },
   ]);
   const [chatInput, setChatInput] = useState("");
+  const [timelineAnchorDate, setTimelineAnchorDate] = useState(todayLabel);
+  const [meetingAnchorDate, setMeetingAnchorDate] = useState(todayLabel);
 
   useEffect(() => {
     let cancelled = false;
@@ -385,8 +403,11 @@ export default function Home() {
   const selectedProjectTasks = selectedProject ? tasksForProject(selectedProject.id) : [];
   const selectedActiveTasks = selectedProjectTasks.filter((task) => task.status !== "done");
   const selectedDoneTasks = selectedProjectTasks.filter((task) => task.status === "done");
-  const weekDates = useMemo(() => weekDatesFor(todayLabel), []);
+  const weekDates = useMemo(() => weekDatesFor(timelineAnchorDate), [timelineAnchorDate]);
+  const meetingWeekDates = useMemo(() => weekDatesFor(meetingAnchorDate), [meetingAnchorDate]);
   const weekDateSet = useMemo(() => new Set(weekDates), [weekDates]);
+  const meetingWeekDateSet = useMemo(() => new Set(meetingWeekDates), [meetingWeekDates]);
+  const currentWeekDateSet = useMemo(() => new Set(weekDatesFor(todayLabel)), []);
   const weekSchedule = weekDates.map((date) => {
     const dayEvents = data.events
       .filter((event) => eventDate(event) === date)
@@ -402,17 +423,16 @@ export default function Home() {
     const loadRatio = Math.min(100, Math.round((eventLoad / 420) * 100 + dayTasks.length * 10));
     return { date, events: dayEvents, tasks: dayTasks, eventLoad, loadRatio };
   });
-  const meetingSchedule = weekDates.map((date) => ({
+  const meetingSchedule = meetingWeekDates.map((date) => ({
     date,
     events: data.events
       .filter((event) => event.kind === "meeting" && eventDate(event) === date)
       .sort((a, b) => a.startAt.localeCompare(b.startAt)),
   }));
-  const futureMeetings = data.events
-    .filter((event) => event.kind === "meeting" && event.endAt >= `${todayLabel}T00:00`)
-    .sort((a, b) => a.startAt.localeCompare(b.startAt));
   const weekTaskCount = liveTasks.filter((task) => task.dueDate && weekDateSet.has(task.dueDate)).length;
   const weekMeetingCount = data.events.filter((event) => event.kind === "meeting" && weekDateSet.has(eventDate(event))).length;
+  const meetingWeekMeetingCount = data.events.filter((event) => event.kind === "meeting" && meetingWeekDateSet.has(eventDate(event))).length;
+  const currentWeekMeetingCount = data.events.filter((event) => event.kind === "meeting" && currentWeekDateSet.has(eventDate(event))).length;
   const detailTask = detailTarget?.kind === "task" ? data.tasks.find((task) => task.id === detailTarget.id) : undefined;
   const detailEvent = detailTarget?.kind === "event" ? data.events.find((event) => event.id === detailTarget.id) : undefined;
 
@@ -672,7 +692,7 @@ export default function Home() {
         <nav className="nav">
           {[
             ["today", "今日"],
-            ["meetings", `会议 ${weekMeetingCount ? `(${weekMeetingCount})` : ""}`],
+            ["meetings", `会议 ${currentWeekMeetingCount ? `(${currentWeekMeetingCount})` : ""}`],
             ["projects", "项目"],
             ["trash", `回收站 ${trashedTasks.length ? `(${trashedTasks.length})` : ""}`],
           ].map(([key, label]) => (
@@ -709,7 +729,7 @@ export default function Home() {
           <>
             <header className="hero">
               <div>
-                <p>2026-07-13 周一</p>
+                <p>{formatWeekDay(todayLabel)}</p>
                 <h1>今天把哪些事推进一点点？</h1>
                 <span className={`save-state ${saveState}`}>{dataReady ? saveStateLabels[saveState] : "正在读取挂载数据文件"}</span>
               </div>
@@ -788,8 +808,21 @@ export default function Home() {
 
             <section className="panel wide">
               <div className="panel-head">
-                <h2>本周时间轴</h2>
-                <span>{weekTaskCount} 个 Todo · {weekMeetingCount} 个会议</span>
+                <div>
+                  <h2>周时间轴</h2>
+                  <span>{formatWeekRange(weekDates)} · {weekTaskCount} 个 Todo · {weekMeetingCount} 个会议</span>
+                </div>
+                <div className="week-controls">
+                  <button className="secondary" type="button" onClick={() => setTimelineAnchorDate(addDays(timelineAnchorDate, -7))}>
+                    上一周
+                  </button>
+                  <button className="secondary" type="button" onClick={() => setTimelineAnchorDate(todayLabel)}>
+                    本周
+                  </button>
+                  <button className="secondary" type="button" onClick={() => setTimelineAnchorDate(addDays(timelineAnchorDate, 7))}>
+                    下一周
+                  </button>
+                </div>
               </div>
               <div className="week-timeline">
                 {weekSchedule.map((day) => (
@@ -847,7 +880,7 @@ export default function Home() {
             <section className="panel wide">
               <div className="panel-head">
                 <h2>创建会议</h2>
-                <span>{weekMeetingCount} 个本周会议</span>
+                <span>{meetingWeekMeetingCount} 个当前周会议</span>
               </div>
               <form className="meeting-composer" onSubmit={addMeeting}>
                 <label>
@@ -886,8 +919,21 @@ export default function Home() {
 
             <section className="panel wide">
               <div className="panel-head">
-                <h2>本周会议时间轴</h2>
-                <span>{weekMeetingCount} 个会议</span>
+                <div>
+                  <h2>会议时间轴</h2>
+                  <span>{formatWeekRange(meetingWeekDates)} · {meetingWeekMeetingCount} 个会议</span>
+                </div>
+                <div className="week-controls">
+                  <button className="secondary" type="button" onClick={() => setMeetingAnchorDate(addDays(meetingAnchorDate, -7))}>
+                    上一周
+                  </button>
+                  <button className="secondary" type="button" onClick={() => setMeetingAnchorDate(todayLabel)}>
+                    本周
+                  </button>
+                  <button className="secondary" type="button" onClick={() => setMeetingAnchorDate(addDays(meetingAnchorDate, 7))}>
+                    下一周
+                  </button>
+                </div>
               </div>
               <div className="week-timeline">
                 {meetingSchedule.map((day) => (
@@ -918,38 +964,6 @@ export default function Home() {
                     </div>
                   </article>
                 ))}
-              </div>
-            </section>
-
-            <section className="panel wide">
-              <div className="panel-head">
-                <h2>未来会议总表</h2>
-                <span>{futureMeetings.length} 个未结束会议</span>
-              </div>
-              <div className="meeting-table">
-                {futureMeetings.map((event) => (
-                  <article className="meeting-row" key={event.id}>
-                    <button
-                      className="meeting-summary"
-                      type="button"
-                      onClick={() => {
-                        setSelectedProjectId(event.projectId);
-                        setDetailTarget({ kind: "event", id: event.id });
-                      }}
-                    >
-                      <strong>{event.title}</strong>
-                      <p>
-                        <em className="time-chip">{eventDate(event)} {eventTimeRange(event)}</em>
-                        {projectsById[event.projectId]?.name ?? "Inbox / 未归类"}
-                      </p>
-                    </button>
-                    <label>
-                      会议备注
-                      <textarea value={event.note} onChange={(inputEvent) => updateEvent(event.id, { note: inputEvent.target.value })} placeholder="会议中随手记录结论、待跟进事项或纪要" />
-                    </label>
-                  </article>
-                ))}
-                {!futureMeetings.length && <p className="empty-state">还没有未来会议。</p>}
               </div>
             </section>
           </div>
