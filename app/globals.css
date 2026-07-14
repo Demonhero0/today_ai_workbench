@@ -282,8 +282,21 @@ label {
   align-items: start;
 }
 
+.today-dashboard {
+  grid-template-columns: minmax(420px, 1.15fr) minmax(320px, 0.85fr);
+}
+
+.today-dashboard .timeline-panel {
+  grid-column: 1 / -1;
+}
+
 .meetings-page {
-  gap: 8px;
+  grid-template-columns: minmax(320px, 0.36fr) minmax(520px, 1fr);
+  gap: 14px;
+}
+
+.meeting-timeline-panel {
+  min-width: 0;
 }
 
 .panel {
@@ -333,6 +346,12 @@ label {
 .week-controls .secondary {
   min-height: 34px;
   padding: 0 10px;
+}
+
+.week-controls .secondary.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
 }
 
 .panel h2 {
@@ -539,7 +558,7 @@ label {
 
 .meeting-composer {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(140px, 100%), 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
   align-items: end;
   min-width: 0;
@@ -565,8 +584,8 @@ label {
 .chat-log {
   display: grid;
   gap: 10px;
-  min-height: 420px;
-  max-height: 560px;
+  min-height: 320px;
+  max-height: 440px;
   overflow: auto;
   align-content: start;
 }
@@ -718,6 +737,11 @@ label {
   padding-bottom: 2px;
 }
 
+.week-timeline.month-view {
+  grid-template-columns: repeat(7, minmax(120px, 1fr));
+  overflow-x: visible;
+}
+
 .week-day {
   display: grid;
   grid-template-rows: auto auto 1fr;
@@ -728,6 +752,43 @@ label {
   border: 1px solid var(--line);
   border-radius: 10px;
   background: var(--panel-strong);
+}
+
+.month-view .week-day {
+  min-width: 0;
+  min-height: 132px;
+  gap: 7px;
+  padding: 9px;
+}
+
+.month-view .week-day header {
+  align-items: center;
+}
+
+.month-view .week-day header small,
+.month-view .load-bar,
+.month-view .empty-state {
+  display: none;
+}
+
+.month-view .week-day header span {
+  min-width: 24px;
+  height: 24px;
+  font-size: 12px;
+}
+
+.month-view .week-items {
+  gap: 5px;
+}
+
+.month-view .week-item {
+  min-height: 0;
+  padding: 6px 7px;
+  border-left-width: 3px;
+}
+
+.month-view .week-item span {
+  display: none;
 }
 
 .week-day.today {
@@ -874,12 +935,15 @@ label {
 
 .project-page {
   display: grid;
-  gap: 14px;
+  gap: 12px;
 }
 
 .project-create-panel {
-  gap: 8px;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: end;
+  gap: 12px;
   padding: 12px 14px;
+  align-content: start;
 }
 
 .project-composer.inline {
@@ -889,9 +953,13 @@ label {
   padding: 8px;
 }
 
+.project-create-panel .panel-head {
+  align-content: end;
+}
+
 .project-workspace {
   display: grid;
-  grid-template-columns: minmax(260px, 0.45fr) minmax(520px, 1fr);
+  grid-template-columns: minmax(240px, 0.34fr) minmax(520px, 1fr);
   gap: 14px;
   align-items: start;
 }
@@ -1093,6 +1161,17 @@ label {
   .nav button {
     text-align: center;
   }
+
+  .today-dashboard,
+  .meetings-page,
+  .project-create-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .week-timeline.month-view {
+    grid-template-columns: repeat(7, minmax(96px, 1fr));
+    overflow-x: auto;
+  }
 }
 
 @media (max-width: 760px) {
@@ -1106,6 +1185,7 @@ label {
   .today-task,
   .task-composer,
   .meeting-composer,
+  .project-create-panel,
   .project-composer,
   .project-composer.inline,
   .project-workspace,

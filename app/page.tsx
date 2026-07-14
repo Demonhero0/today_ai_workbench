@@ -9,6 +9,7 @@ type View = "today" | "meetings" | "projects" | "trash";
 type EventKind = "meeting" | "focus" | "admin";
 type DetailTarget = { kind: "task" | "event"; id: string } | null;
 type ChatMessage = { role: "user" | "assistant"; content: string };
+type TimelineScale = "week" | "month";
 type AiAction =
   | { type: "create_project"; name: string; goal?: string }
   | { type: "create_meeting"; title: string; date: string; start: string; end: string; project?: string; note?: string }
@@ -178,6 +179,12 @@ function addDays(dateText: string, days: number) {
   return dateInputFromDate(date);
 }
 
+function addMonths(dateText: string, months: number) {
+  const date = dateFromInput(dateText);
+  date.setMonth(date.getMonth() + months);
+  return dateInputFromDate(date);
+}
+
 function weekDatesFor(dateText: string) {
   const date = dateFromInput(dateText);
   const day = date.getDay();
@@ -185,10 +192,26 @@ function weekDatesFor(dateText: string) {
   return Array.from({ length: 7 }, (_, index) => addDays(dateInputFromDate(date), mondayOffset + index));
 }
 
+function monthDatesFor(dateText: string) {
+  const date = dateFromInput(dateText);
+  const monthStart = new Date(date.getFullYear(), date.getMonth(), 1);
+  const monthEnd = new Date(date.getFullYear(), date.getMonth() + 1, 0);
+  const startDay = monthStart.getDay();
+  const mondayOffset = startDay === 0 ? -6 : 1 - startDay;
+  const gridStart = dateInputFromDate(new Date(monthStart.getFullYear(), monthStart.getMonth(), monthStart.getDate() + mondayOffset));
+  const totalDays = Math.ceil((monthEnd.getDate() - mondayOffset) / 7) * 7;
+  return Array.from({ length: totalDays }, (_, index) => addDays(gridStart, index));
+}
+
 function formatWeekDay(dateText: string) {
   const date = dateFromInput(dateText);
   const weekdays = ["日", "一", "二", "三", "四", "五", "六"];
   return `${date.getMonth() + 1}/${date.getDate()} 周${weekdays[date.getDay()]}`;
+}
+
+function formatMonth(dateText: string) {
+  const date = dateFromInput(dateText);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 }
 
 function formatWeekRange(dates: string[]) {
@@ -251,12 +274,12 @@ export default function Home() {
   const [meetingNote, setMeetingNote] = useState("");
   const [detailTarget, setDetailTarget] = useState<DetailTarget>(null);
   const [aiState, setAiState] = useState<"idle" | "loading" | "error">("idle");
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
-    { role: "assistant", content: "你可以问我本周有什么风险，也可以直接说：创建项目、创建会议、添加 Todo，能执行的我会帮你写进今天。" },
-  ]);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState("");
   const [timelineAnchorDate, setTimelineAnchorDate] = useState(todayLabel);
   const [meetingAnchorDate, setMeetingAnchorDate] = useState(todayLabel);
+  const [timelineScale, setTimelineScale] = useState<TimelineScale>("week");
+  const [meetingScale, setMeetingScale] = useState<TimelineScale>("week");
   const chatEndRef = useRef<HTMLDivElement | null>(null);
   const didAutoAnalyzeRef = useRef(false);
 
@@ -343,11 +366,10 @@ export default function Home() {
   const selectedProjectTasks = selectedProject ? tasksForProject(selectedProject.id) : [];
   const selectedActiveTasks = selectedProjectTasks.filter((task) => task.status !== "done");
   const selectedDoneTasks = selectedProjectTasks.filter((task) => task.status === "done");
-  const weekDates = useMemo(() => weekDatesFor(timelineAnchorDate), [timelineAnchorDate]);
-  const meetingWeekDates = useMemo(() => weekDatesFor(meetingAnchorDate), [meetingAnchorDate]);
+  const weekDates = useMemo(() => (timelineScale === "week" ? weekDatesFor(timelineAnchorDate) : monthDatesFor(timelineAnchorDate)), [timelineAnchorDate, timelineScale]);
+  const meetingWeekDates = useMemo(() => (meetingScale === "week" ? weekDatesFor(meetingAnchorDate) : monthDatesFor(meetingAnchorDate)), [meetingAnchorDate, meetingScale]);
   const weekDateSet = useMemo(() => new Set(weekDates), [weekDates]);
   const meetingWeekDateSet = useMemo(() => new Set(meetingWeekDates), [meetingWeekDates]);
-  const currentWeekDateSet = useMemo(() => new Set(weekDatesFor(todayLabel)), []);
   const weekSchedule = weekDates.map((date) => {
     const dayEvents = data.events
       .filter((event) => eventDate(event) === date)
@@ -372,7 +394,8 @@ export default function Home() {
   const weekTaskCount = liveTasks.filter((task) => task.dueDate && weekDateSet.has(task.dueDate)).length;
   const weekMeetingCount = data.events.filter((event) => event.kind === "meeting" && weekDateSet.has(eventDate(event))).length;
   const meetingWeekMeetingCount = data.events.filter((event) => event.kind === "meeting" && meetingWeekDateSet.has(eventDate(event))).length;
-  const currentWeekMeetingCount = data.events.filter((event) => event.kind === "meeting" && currentWeekDateSet.has(eventDate(event))).length;
+  const timelineRangeLabel = timelineScale === "week" ? formatWeekRange(weekDates) : formatMonth(timelineAnchorDate);
+  const meetingRangeLabel = meetingScale === "week" ? formatWeekRange(meetingWeekDates) : formatMonth(meetingAnchorDate);
   const detailTask = detailTarget?.kind === "task" ? data.tasks.find((task) => task.id === detailTarget.id) : undefined;
   const detailEvent = detailTarget?.kind === "event" ? data.events.find((event) => event.id === detailTarget.id) : undefined;
 
@@ -701,7 +724,7 @@ export default function Home() {
       ...current,
       {
         role: "assistant",
-        content: `今天建议：\n${suggestions.map((suggestion) => `- ${suggestion}`).join("\n")}`,
+        content: `你可以问我本周有什么风险，也可以直接说：创建项目、创建会议、添加 Todo，能执行的我会帮你写进今天。\n\n今天建议：\n${suggestions.map((suggestion) => `- ${suggestion}`).join("\n")}`,
       },
     ]);
   }
@@ -741,7 +764,7 @@ export default function Home() {
         <nav className="nav">
           {[
             ["today", "今天"],
-            ["meetings", `会议 ${currentWeekMeetingCount ? `(${currentWeekMeetingCount})` : ""}`],
+            ["meetings", "会议"],
             ["projects", "项目"],
             ["trash", `回收站 ${trashedTasks.length ? `(${trashedTasks.length})` : ""}`],
           ].map(([key, label]) => (
@@ -794,8 +817,8 @@ export default function Home() {
         ) : null}
 
         {view === "today" && (
-          <div className="dashboard-grid">
-            <section className="panel wide">
+          <div className="dashboard-grid today-dashboard">
+            <section className="panel chat-panel">
               <div className="panel-head">
                 <h2>AI Chat</h2>
                 <span>基于当前项目、Todo、会议和归档状态回答</span>
@@ -823,7 +846,7 @@ export default function Home() {
               </form>
             </section>
 
-            <section className="panel">
+            <section className="panel today-queue-panel">
               <div className="panel-head">
                 <h2>任务队列</h2>
                 <span>{activeTasks.length} 个未完成</span>
@@ -837,28 +860,35 @@ export default function Home() {
                     onStatusChange={(status) => updateTask(task.id, { status })}
                   />
                 ))}
+                {!liveTasks.length && <p className="empty-state">还没有 Todo。可以在项目页添加，或对 AI 说“添加 Todo：整理周计划”。</p>}
               </div>
             </section>
 
-            <section className="panel">
+            <section className="panel timeline-panel wide">
               <div className="panel-head">
                 <div>
-                  <h2>周时间轴</h2>
-                  <span>{formatWeekRange(weekDates)} · {weekTaskCount} 个 Todo · {weekMeetingCount} 个会议</span>
+                  <h2>{timelineScale === "week" ? "周时间轴" : "月时间轴"}</h2>
+                  <span>{timelineRangeLabel} · {weekTaskCount} 个 Todo · {weekMeetingCount} 个会议</span>
                 </div>
                 <div className="week-controls">
-                  <button className="secondary" type="button" onClick={() => setTimelineAnchorDate(addDays(timelineAnchorDate, -7))}>
-                    上一周
+                  <button className={`secondary ${timelineScale === "week" ? "active" : ""}`} type="button" onClick={() => setTimelineScale("week")}>
+                    周
+                  </button>
+                  <button className={`secondary ${timelineScale === "month" ? "active" : ""}`} type="button" onClick={() => setTimelineScale("month")}>
+                    月
+                  </button>
+                  <button className="secondary" type="button" onClick={() => setTimelineAnchorDate(timelineScale === "week" ? addDays(timelineAnchorDate, -7) : addMonths(timelineAnchorDate, -1))}>
+                    上{timelineScale === "week" ? "一周" : "一月"}
                   </button>
                   <button className="secondary" type="button" onClick={() => setTimelineAnchorDate(todayLabel)}>
-                    本周
+                    {timelineScale === "week" ? "本周" : "本月"}
                   </button>
-                  <button className="secondary" type="button" onClick={() => setTimelineAnchorDate(addDays(timelineAnchorDate, 7))}>
-                    下一周
+                  <button className="secondary" type="button" onClick={() => setTimelineAnchorDate(timelineScale === "week" ? addDays(timelineAnchorDate, 7) : addMonths(timelineAnchorDate, 1))}>
+                    下{timelineScale === "week" ? "一周" : "一月"}
                   </button>
                 </div>
               </div>
-              <div className="week-timeline">
+              <div className={`week-timeline ${timelineScale === "month" ? "month-view" : ""}`}>
                 {weekSchedule.map((day) => (
                   <article className={`week-day ${day.date === todayLabel ? "today" : ""}`} key={day.date}>
                     <header>
@@ -911,10 +941,10 @@ export default function Home() {
 
         {view === "meetings" && (
           <div className="dashboard-grid meetings-page">
-            <section className="panel wide compact-panel">
+            <section className="panel compact-panel meeting-create-panel">
               <div className="panel-head">
                 <h2>创建会议</h2>
-                <span>{meetingWeekMeetingCount} 个当前周会议</span>
+                <span>{meetingWeekMeetingCount} 个当前视图会议</span>
               </div>
               <form className="meeting-composer" onSubmit={addMeeting}>
                 <label>
@@ -951,25 +981,31 @@ export default function Home() {
               </form>
             </section>
 
-            <section className="panel wide compact-panel">
+            <section className="panel compact-panel meeting-timeline-panel">
               <div className="panel-head">
                 <div>
-                  <h2>会议时间轴</h2>
-                  <span>{formatWeekRange(meetingWeekDates)} · {meetingWeekMeetingCount} 个会议</span>
+                  <h2>{meetingScale === "week" ? "会议时间轴" : "会议月视图"}</h2>
+                  <span>{meetingRangeLabel} · {meetingWeekMeetingCount} 个会议</span>
                 </div>
                 <div className="week-controls">
-                  <button className="secondary" type="button" onClick={() => setMeetingAnchorDate(addDays(meetingAnchorDate, -7))}>
-                    上一周
+                  <button className={`secondary ${meetingScale === "week" ? "active" : ""}`} type="button" onClick={() => setMeetingScale("week")}>
+                    周
+                  </button>
+                  <button className={`secondary ${meetingScale === "month" ? "active" : ""}`} type="button" onClick={() => setMeetingScale("month")}>
+                    月
+                  </button>
+                  <button className="secondary" type="button" onClick={() => setMeetingAnchorDate(meetingScale === "week" ? addDays(meetingAnchorDate, -7) : addMonths(meetingAnchorDate, -1))}>
+                    上{meetingScale === "week" ? "一周" : "一月"}
                   </button>
                   <button className="secondary" type="button" onClick={() => setMeetingAnchorDate(todayLabel)}>
-                    本周
+                    {meetingScale === "week" ? "本周" : "本月"}
                   </button>
-                  <button className="secondary" type="button" onClick={() => setMeetingAnchorDate(addDays(meetingAnchorDate, 7))}>
-                    下一周
+                  <button className="secondary" type="button" onClick={() => setMeetingAnchorDate(meetingScale === "week" ? addDays(meetingAnchorDate, 7) : addMonths(meetingAnchorDate, 1))}>
+                    下{meetingScale === "week" ? "一周" : "一月"}
                   </button>
                 </div>
               </div>
-              <div className="week-timeline">
+              <div className={`week-timeline ${meetingScale === "month" ? "month-view" : ""}`}>
                 {meetingSchedule.map((day) => (
                   <article className={`week-day ${day.date === todayLabel ? "today" : ""}`} key={day.date}>
                     <header>
