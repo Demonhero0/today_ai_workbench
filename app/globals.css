@@ -306,6 +306,11 @@ label {
   color: var(--accent-strong);
 }
 
+.notice.error {
+  background: rgba(168, 72, 66, 0.12);
+  color: var(--red);
+}
+
 .suggestions,
 .log-list {
   display: grid;
@@ -505,6 +510,55 @@ label {
   padding: 0 14px;
   background: var(--accent);
   color: #fff;
+}
+
+.chat-log {
+  display: grid;
+  gap: 10px;
+  max-height: 360px;
+  overflow: auto;
+}
+
+.chat-message {
+  display: grid;
+  gap: 4px;
+  max-width: 78%;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel-strong);
+}
+
+.chat-message.user {
+  justify-self: end;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.chat-message p {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.chat-composer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+}
+
+.chat-composer button {
+  min-height: 40px;
+  border-radius: 8px;
+  padding: 0 14px;
+  background: var(--accent);
+  color: #fff;
+}
+
+.chat-composer button:disabled,
+.panel-head button:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
 }
 
 .meeting-table {

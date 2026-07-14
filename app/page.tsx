@@ -8,6 +8,7 @@ type Priority = "high" | "medium" | "low";
 type View = "today" | "meetings" | "projects" | "trash";
 type EventKind = "meeting" | "focus" | "admin";
 type DetailTarget = { kind: "task" | "event"; id: string } | null;
+type ChatMessage = { role: "user" | "assistant"; content: string };
 
 type Task = {
   id: string;
@@ -215,15 +216,6 @@ function normalizeData(data: WorkbenchData): WorkbenchData {
   };
 }
 
-function inferDueLabel(text: string) {
-  if (text.includes("今天")) return "今天";
-  if (text.includes("明天")) return "明天";
-  if (text.includes("周三") || text.includes("星期三")) return "周三";
-  if (text.includes("周五") || text.includes("星期五")) return "周五";
-  if (text.includes("本周")) return "本周";
-  return "未定";
-}
-
 function inferDueDate(text: string) {
   if (text.includes("今天")) return todayLabel;
   if (text.includes("明天")) return "2026-07-14";
@@ -286,19 +278,12 @@ function eventMinutes(event: CalendarEvent) {
   return Math.max(0, Math.round((end - start) / 60000));
 }
 
-function inferPriority(text: string): Priority {
-  if (text.includes("截止") || text.includes("必须") || text.includes("重要") || text.includes("今天")) return "high";
-  if (text.includes("本周") || text.includes("周") || text.includes("确认")) return "medium";
-  return "low";
-}
-
 export default function Home() {
   const [data, setData] = useState<WorkbenchData>(normalizeData(starterData));
   const [dataReady, setDataReady] = useState(false);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [view, setView] = useState<View>("today");
   const [selectedProjectId, setSelectedProjectId] = useState("client");
-  const [capture, setCapture] = useState("周三前整理签证材料，今天先问中介清单");
   const [projectName, setProjectName] = useState("");
   const [projectGoal, setProjectGoal] = useState("");
   const [newTaskTitle, setNewTaskTitle] = useState("");
@@ -313,6 +298,13 @@ export default function Home() {
   const [meetingNote, setMeetingNote] = useState("");
   const [planApplied, setPlanApplied] = useState(false);
   const [detailTarget, setDetailTarget] = useState<DetailTarget>(null);
+  const [aiSuggestions, setAiSuggestions] = useState<string[]>([]);
+  const [aiState, setAiState] = useState<"idle" | "loading" | "error">("idle");
+  const [aiError, setAiError] = useState("");
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
+    { role: "assistant", content: "你可以问我本周有什么风险、某个项目下一步是什么，或者让我们一起梳理你的个人工作台。" },
+  ]);
+  const [chatInput, setChatInput] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -424,7 +416,7 @@ export default function Home() {
   const detailTask = detailTarget?.kind === "task" ? data.tasks.find((task) => task.id === detailTarget.id) : undefined;
   const detailEvent = detailTarget?.kind === "event" ? data.events.find((event) => event.id === detailTarget.id) : undefined;
 
-  const suggestions = [
+  const localSuggestions = [
     highPriorityTasks.length
       ? `优先处理 ${highPriorityTasks[0].title}，它是当前最高风险动作。`
       : "今天没有高优先级任务，可以安排一段维护性整理。",
@@ -435,6 +427,7 @@ export default function Home() {
       ? `Inbox 里还有 ${inboxTasks.length} 个未归类任务，建议先分配到具体项目。`
       : "15:00-16:30 是今天最长空档，适合放 60 分钟以上的深度任务。",
   ];
+  const suggestions = aiSuggestions.length ? aiSuggestions : localSuggestions;
 
   function updateTask(taskId: string, patch: Partial<Task>) {
     setData((current) => ({
@@ -469,55 +462,6 @@ export default function Home() {
       ...current,
       tasks: current.tasks.filter((task) => task.id !== taskId),
     }));
-  }
-
-  function handleCapture(event: FormEvent) {
-    event.preventDefault();
-    const trimmed = capture.trim();
-    if (!trimmed) return;
-
-    const matchedProject =
-      data.projects.find((project) => trimmed.includes(project.name.replace("办理", ""))) ??
-      data.projects.find((project) => trimmed.includes(project.name.slice(0, 2))) ??
-      projectsById[inboxProjectId] ??
-      data.projects[0];
-
-    const due = inferDueLabel(trimmed);
-    const dueDate = inferDueDate(trimmed);
-    const priority = inferPriority(trimmed);
-    const pieces = trimmed
-      .split(/[，,。；;]/)
-      .map((piece) => piece.trim())
-      .filter(Boolean);
-
-    const newTasks = pieces.slice(0, 3).map((piece) => ({
-      id: makeId("task"),
-      title: piece.replace(/^今天先/, "").replace(/^先/, ""),
-      projectId: matchedProject.id,
-      due,
-      dueDate,
-      status: "todo" as TaskStatus,
-      priority,
-      note: "由快速记录整理",
-      createdAt: todayLabel,
-    }));
-
-    setData((current) => ({
-      ...current,
-      tasks: [...newTasks, ...current.tasks],
-      projects: current.projects.map((project) =>
-        project.id === matchedProject.id
-          ? {
-              ...project,
-              updatedAt: "刚刚",
-              nextAction: newTasks[0]?.title ?? project.nextAction,
-              log: [`刚刚 · 从快速记录新增 ${newTasks.length} 个动作`, ...project.log].slice(0, 5),
-            }
-          : project,
-      ),
-    }));
-    setSelectedProjectId(matchedProject.id);
-    setPlanApplied(false);
   }
 
   function addProject(event: FormEvent) {
@@ -670,6 +614,43 @@ export default function Home() {
     setPlanApplied(true);
   }
 
+  async function requestAi(mode: "suggestions" | "chat", message?: string, messages: ChatMessage[] = chatMessages) {
+    setAiState("loading");
+    setAiError("");
+    try {
+      const response = await fetch("/api/ai", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ mode, message, messages, data }),
+      });
+      const payload = (await response.json()) as { text?: string; suggestions?: string[]; error?: string };
+      if (!response.ok) throw new Error(payload.error ?? "LLM 暂时不可用");
+      setAiState("idle");
+      return payload;
+    } catch (error) {
+      const messageText = error instanceof Error ? error.message : "LLM 暂时不可用";
+      setAiState("error");
+      setAiError(messageText);
+      return { error: messageText };
+    }
+  }
+
+  async function analyzeTodayWithLlm() {
+    const payload = await requestAi("suggestions");
+    if (payload.suggestions?.length) setAiSuggestions(payload.suggestions);
+  }
+
+  async function sendChatMessage(event: FormEvent) {
+    event.preventDefault();
+    const message = chatInput.trim();
+    if (!message || aiState === "loading") return;
+    const nextMessages: ChatMessage[] = [...chatMessages, { role: "user", content: message }];
+    setChatMessages(nextMessages);
+    setChatInput("");
+    const payload = await requestAi("chat", message, nextMessages);
+    setChatMessages((current) => [...current, { role: "assistant", content: payload.text ?? payload.error ?? "我这边暂时没拿到回复。" }]);
+  }
+
   function resetDemo() {
     setData(normalizeData(starterData));
     setSelectedProjectId("client");
@@ -737,14 +718,6 @@ export default function Home() {
             </button>
             </header>
 
-            <form className="capture" onSubmit={handleCapture}>
-              <label>
-                快速记录
-                <input value={capture} onChange={(event) => setCapture(event.target.value)} placeholder="随手写一句，AI 帮你拆成任务" />
-              </label>
-              <button type="submit">AI 整理</button>
-            </form>
-
             <section className="stats" aria-label="今日概览">
               <Metric label="今日待办" value={activeTasks.length.toString()} hint={`${highPriorityTasks.length} 个高优先级`} />
               <Metric label="项目" value={realProjects.length.toString()} hint={`${waitingProjects.length} 个需要关注`} />
@@ -759,16 +732,20 @@ export default function Home() {
             <section className="panel">
               <div className="panel-head">
                 <h2>AI 今日建议</h2>
-                <button className="secondary" type="button" onClick={applyPlan}>
-                  采纳计划
+                <button className="secondary" type="button" onClick={analyzeTodayWithLlm} disabled={aiState === "loading"}>
+                  {aiState === "loading" ? "分析中" : "LLM 分析"}
                 </button>
               </div>
+              {aiError && <p className="notice error">{aiError}</p>}
               {planApplied && <p className="notice">已把最高优先级任务放入 15:00 后的时间轴。</p>}
               <ol className="suggestions">
                 {suggestions.map((suggestion) => (
                   <li key={suggestion}>{suggestion}</li>
                 ))}
               </ol>
+              <button className="secondary" type="button" onClick={applyPlan}>
+                把最高优先级 Todo 放入 15:00
+              </button>
             </section>
 
             <section className="panel">
@@ -786,6 +763,27 @@ export default function Home() {
                   />
                 ))}
               </div>
+            </section>
+
+            <section className="panel wide">
+              <div className="panel-head">
+                <h2>AI Chat</h2>
+                <span>基于当前项目、Todo、会议和归档状态回答</span>
+              </div>
+              <div className="chat-log">
+                {chatMessages.map((message, index) => (
+                  <article className={`chat-message ${message.role}`} key={`${message.role}-${index}`}>
+                    <strong>{message.role === "user" ? "我" : "AI"}</strong>
+                    <p>{message.content}</p>
+                  </article>
+                ))}
+              </div>
+              <form className="chat-composer" onSubmit={sendChatMessage}>
+                <input value={chatInput} onChange={(event) => setChatInput(event.target.value)} placeholder="问问你的工作台，例如：这周哪个项目风险最高？" />
+                <button type="submit" disabled={aiState === "loading" || !chatInput.trim()}>
+                  发送
+                </button>
+              </form>
             </section>
 
             <section className="panel wide">

@@ -22,6 +22,20 @@ Open:
 http://localhost:3000
 ```
 
+## LLM
+
+The chat and AI suggestions use OpenAI through environment variables. Create a
+local `.env` file next to `docker-compose.yml` or export these variables before
+starting Docker:
+
+```bash
+OPENAI_API_KEY=sk-...
+OPENAI_MODEL=gpt-4.1-mini
+```
+
+The API key is read by the container at runtime. It is not written into
+`workbench.json`.
+
 Stop the app:
 
 ```bash

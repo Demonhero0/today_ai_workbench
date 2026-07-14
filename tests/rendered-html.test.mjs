@@ -54,8 +54,9 @@ test("server-renders the workbench shell", async () => {
   const html = await response.text();
   assert.match(html, /<title>AI 个人工作台<\/title>/i);
   assert.match(html, /AI 工作台/);
-  assert.match(html, /快速记录/);
   assert.match(html, /AI 今日建议/);
+  assert.match(html, /LLM 分析/);
+  assert.match(html, /AI Chat/);
   assert.match(html, /任务队列/);
   assert.match(html, /会议/);
   assert.match(html, /回收站/);
