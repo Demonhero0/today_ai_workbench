@@ -7,7 +7,7 @@ type TaskStatus = "todo" | "doing" | "waiting" | "done";
 type Priority = "high" | "medium" | "low";
 type View = "today" | "meetings" | "projects" | "trash";
 type EventKind = "meeting" | "focus" | "admin";
-type DetailTarget = { kind: "task" | "event"; id: string } | null;
+type DetailTarget = { kind: "task" | "event" | "project"; id: string } | null;
 type ChatMessage = { role: "user" | "assistant"; content: string };
 type TimelineScale = "week" | "month";
 type TimelineDragItem = { kind: "task" | "event"; id: string };
@@ -90,6 +90,13 @@ const priorityLabels: Record<Priority, string> = {
   high: "高",
   medium: "中",
   low: "低",
+};
+
+const projectStatusLabels: Record<Project["status"], string> = {
+  active: "进行中",
+  waiting: "等待",
+  slow: "慢推进",
+  healthy: "正常",
 };
 
 const priorityWeight: Record<Priority, number> = { high: 0, medium: 1, low: 2 };
@@ -407,6 +414,7 @@ export default function Home() {
   const meetingRangeLabel = meetingScale === "week" ? formatWeekRange(meetingWeekDates) : formatMonth(meetingAnchorDate);
   const detailTask = detailTarget?.kind === "task" ? data.tasks.find((task) => task.id === detailTarget.id) : undefined;
   const detailEvent = detailTarget?.kind === "event" ? data.events.find((event) => event.id === detailTarget.id) : undefined;
+  const detailProject = detailTarget?.kind === "project" ? data.projects.find((project) => project.id === detailTarget.id) : undefined;
 
   const localSuggestions = [
     highPriorityTasks.length
@@ -431,6 +439,21 @@ export default function Home() {
     setData((current) => ({
       ...current,
       events: current.events.map((event) => (event.id === eventId ? { ...event, ...patch } : event)),
+    }));
+  }
+
+  function updateProject(projectId: string, patch: Partial<Project>) {
+    setData((current) => ({
+      ...current,
+      projects: current.projects.map((project) =>
+        project.id === projectId
+          ? {
+              ...project,
+              ...patch,
+              updatedAt: "刚刚",
+            }
+          : project,
+      ),
     }));
   }
 
@@ -1175,9 +1198,14 @@ export default function Home() {
                 <div className="panel-actions">
                   <span>{selectedProject.name} · {selectedActiveTasks.length} 个未完成</span>
                   {selectedProject.id !== inboxProjectId && (
-                    <button className="secondary" type="button" onClick={() => archiveProject(selectedProject.id)}>
-                      归档项目
-                    </button>
+                    <>
+                      <button className="secondary" type="button" onClick={() => setDetailTarget({ kind: "project", id: selectedProject.id })}>
+                        编辑项目
+                      </button>
+                      <button className="secondary" type="button" onClick={() => archiveProject(selectedProject.id)}>
+                        归档项目
+                      </button>
+                    </>
                   )}
                 </div>
               </div>
@@ -1245,6 +1273,50 @@ export default function Home() {
             </section>
             </div>
           </div>
+        )}
+
+        {detailProject && (
+          <DetailModal title="项目详情" onClose={() => setDetailTarget(null)}>
+            <div className="detail-form">
+              <label>
+                项目名称
+                <input value={detailProject.name} onChange={(event) => updateProject(detailProject.id, { name: event.target.value })} />
+              </label>
+              <label>
+                状态
+                <select value={detailProject.status} onChange={(event) => updateProject(detailProject.id, { status: event.target.value as Project["status"] })}>
+                  {Object.entries(projectStatusLabels).map(([key, label]) => (
+                    <option key={key} value={key}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                阶段
+                <input value={detailProject.phase} onChange={(event) => updateProject(detailProject.id, { phase: event.target.value })} placeholder="例如：调研中 / 开发中 / 收尾" />
+              </label>
+              <label>
+                下一步
+                <input value={detailProject.nextAction} onChange={(event) => updateProject(detailProject.id, { nextAction: event.target.value })} placeholder="写下下一步动作" />
+              </label>
+              <label className="detail-wide">
+                目标
+                <textarea value={detailProject.goal} onChange={(event) => updateProject(detailProject.id, { goal: event.target.value })} placeholder="这个项目要达成什么？" />
+              </label>
+              <div className="detail-meta">
+                <span>最近更新 {detailProject.updatedAt}</span>
+                {detailProject.id !== inboxProjectId && (
+                  <button className="danger-button" type="button" onClick={() => {
+                    archiveProject(detailProject.id);
+                    setDetailTarget(null);
+                  }}>
+                    归档项目
+                  </button>
+                )}
+              </div>
+            </div>
+          </DetailModal>
         )}
 
         {detailTask && (
