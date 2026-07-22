@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 type TaskStatus = "todo" | "doing" | "waiting" | "done";
 type Priority = "high" | "medium" | "low";
-type View = "today" | "meetings" | "projects" | "trash";
+type View = "today" | "meetings" | "projects" | "usage" | "trash";
 type EventKind = "meeting" | "focus" | "admin";
 type DetailTarget = { kind: "task" | "event" | "project"; id: string } | null;
 type ChatMessage = { role: "user" | "assistant"; content: string };
@@ -17,6 +17,24 @@ type AiAction =
   | { type: "create_task"; title: string; project?: string; dueDate?: string; priority?: Priority; note?: string }
   | { type: "update_task_status"; title: string; status: TaskStatus };
 type AiPayload = { text?: string; suggestions?: string[]; actions?: AiAction[]; error?: string };
+type UsageProviderStatus = "ready" | "missing-key" | "error";
+type UsageSnapshot = {
+  fetchedAt: string;
+  kimi: {
+    status: UsageProviderStatus;
+    label: string;
+    message: string;
+    balance?: string;
+  };
+  openai: {
+    status: UsageProviderStatus;
+    label: string;
+    message: string;
+    period?: string;
+    total?: string;
+    buckets?: { date: string; amount: string }[];
+  };
+};
 
 type Task = {
   id: string;
@@ -289,6 +307,9 @@ export default function Home() {
   const [timelineScale, setTimelineScale] = useState<TimelineScale>("week");
   const [meetingScale, setMeetingScale] = useState<TimelineScale>("week");
   const [dragOverDate, setDragOverDate] = useState("");
+  const [usageData, setUsageData] = useState<UsageSnapshot | null>(null);
+  const [usageState, setUsageState] = useState<"idle" | "loading" | "error">("idle");
+  const [usageError, setUsageError] = useState("");
   const chatEndRef = useRef<HTMLDivElement | null>(null);
   const didAutoAnalyzeRef = useRef(false);
 
@@ -809,6 +830,21 @@ export default function Home() {
     setChatMessages((current) => [...current, { role: "assistant", content: `${payload.text ?? payload.error ?? "我这边暂时没拿到回复。"}${actionSummary}` }]);
   }
 
+  async function loadUsage() {
+    setUsageState("loading");
+    setUsageError("");
+    try {
+      const response = await fetch("/api/usage", { cache: "no-store" });
+      const payload = (await response.json()) as UsageSnapshot & { error?: string };
+      if (!response.ok) throw new Error(payload.error ?? "用量信息暂时不可用");
+      setUsageData(payload);
+      setUsageState("idle");
+    } catch (error) {
+      setUsageState("error");
+      setUsageError(error instanceof Error ? error.message : "用量信息暂时不可用");
+    }
+  }
+
   useEffect(() => {
     if (!dataReady || didAutoAnalyzeRef.current) return;
     didAutoAnalyzeRef.current = true;
@@ -818,6 +854,13 @@ export default function Home() {
   }, [dataReady]);
 
   const isTrashView = view === "trash";
+  const navItems: Array<[View, string]> = [
+    ["today", "今天"],
+    ["meetings", "会议"],
+    ["projects", "项目"],
+    ["usage", "用量"],
+    ["trash", `回收站 ${trashedTasks.length ? `(${trashedTasks.length})` : ""}`],
+  ];
 
   return (
     <main className="workbench">
@@ -830,13 +873,16 @@ export default function Home() {
           </div>
         </div>
         <nav className="nav">
-          {[
-            ["today", "今天"],
-            ["meetings", "会议"],
-            ["projects", "项目"],
-            ["trash", `回收站 ${trashedTasks.length ? `(${trashedTasks.length})` : ""}`],
-          ].map(([key, label]) => (
-            <button key={key} className={view === key ? "active" : ""} type="button" onClick={() => setView(key as View)}>
+          {navItems.map(([key, label]) => (
+            <button
+              key={key}
+              className={view === key ? "active" : ""}
+              type="button"
+              onClick={() => {
+                setView(key);
+                if (key === "usage" && !usageData && usageState !== "loading") void loadUsage();
+              }}
+            >
               {label}
             </button>
           ))}
@@ -1123,6 +1169,61 @@ export default function Home() {
                     </div>
                   </article>
                 ))}
+              </div>
+            </section>
+          </div>
+        )}
+
+        {view === "usage" && (
+          <div className="usage-page">
+            <section className="panel usage-hero">
+              <div className="panel-head">
+                <div>
+                  <h2>用量余额</h2>
+                  <span>
+                    {usageData
+                      ? `更新于 ${new Date(usageData.fetchedAt).toLocaleString("zh-CN", { hour12: false })}`
+                      : "查看 Kimi 余额和 OpenAI API 近期开销"}
+                  </span>
+                </div>
+                <button className="secondary" type="button" onClick={loadUsage} disabled={usageState === "loading"}>
+                  {usageState === "loading" ? "刷新中" : "刷新"}
+                </button>
+              </div>
+              {usageState === "error" && <p className="notice error">{usageError}</p>}
+            </section>
+
+            <div className="usage-grid">
+              <UsageCard
+                title="Kimi"
+                status={usageData?.kimi.status ?? "missing-key"}
+                value={usageData?.kimi.balance ?? "未配置"}
+                message={usageData?.kimi.message ?? "配置 KIMI_API_KEY 后可查看 Kimi 账户余额。"}
+              />
+              <UsageCard
+                title="OpenAI"
+                status={usageData?.openai.status ?? "missing-key"}
+                value={usageData?.openai.total ?? "未配置"}
+                message={usageData?.openai.message ?? "配置 OPENAI_ADMIN_KEY 后可查看 OpenAI API 近期开销。"}
+                eyebrow={usageData?.openai.period}
+              />
+            </div>
+
+            <section className="panel usage-history">
+              <div className="panel-head">
+                <h2>OpenAI 最近费用</h2>
+                <span>{usageData?.openai.buckets?.length ? "按天汇总" : "等待可用数据"}</span>
+              </div>
+              <div className="usage-list">
+                {usageData?.openai.buckets?.map((bucket) => (
+                  <article className="usage-row" key={bucket.date}>
+                    <span>{bucket.date}</span>
+                    <strong>{bucket.amount}</strong>
+                  </article>
+                ))}
+                {!usageData?.openai.buckets?.length && (
+                  <p className="empty-state">这里会显示 OpenAI API 每日费用。ChatGPT Plus/Pro 网页订阅的剩余消息数目前没有稳定公开接口可查。</p>
+                )}
               </div>
             </section>
           </div>
@@ -1434,6 +1535,31 @@ function Metric({ label, value, hint }: { label: string; value: string; hint: st
       <strong>{value}</strong>
       <small>{hint}</small>
     </article>
+  );
+}
+
+function UsageCard({
+  title,
+  status,
+  value,
+  message,
+  eyebrow,
+}: {
+  title: string;
+  status: UsageProviderStatus;
+  value: string;
+  message: string;
+  eyebrow?: string;
+}) {
+  return (
+    <section className={`panel usage-card ${status}`}>
+      <div className="usage-card-head">
+        <span>{eyebrow ?? "账户状态"}</span>
+        <strong>{title}</strong>
+      </div>
+      <p className="usage-value">{value}</p>
+      <p className="usage-message">{message}</p>
+    </section>
   );
 }
 

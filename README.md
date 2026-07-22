@@ -12,6 +12,7 @@
 - 今天视图：AI Chat、未完成任务队列、周/月时间轴。
 - 时间轴拖拽：把 Todo 或会议拖到某一天即可调整日期。
 - AI Chat：支持查询工作台，也支持用自然语言创建项目、创建会议、添加 Todo、更新 Todo 状态。
+- 用量页面：查看 Kimi 余额，以及 OpenAI API 近期开销。
 - 本地数据：工作台数据写入挂载的 `workbench.json`。
 
 ## 快速开始
@@ -49,7 +50,27 @@ OPENAI_MODEL=your-model-name
 
 `.env` 已被 Git 忽略，不要提交真实 key。
 
-### 3. 启动
+### 3. 配置用量页面（可选）
+
+如果想在“用量”页面查看 Kimi 余额，配置：
+
+```bash
+KIMI_API_KEY=your-kimi-api-key
+KIMI_BALANCE_BASE_URL=https://api.moonshot.cn/v1
+```
+
+如果 `OPENAI_BASE_URL` 已经是 Kimi/Moonshot 地址，用量接口会在没有 `KIMI_API_KEY` 时尝试复用 `OPENAI_API_KEY`。
+
+如果想查看 OpenAI API 近期开销，需要 OpenAI Admin Key：
+
+```bash
+OPENAI_ADMIN_KEY=your-openai-admin-key
+OPENAI_USAGE_DAYS=30
+```
+
+注意：这里查询的是 OpenAI API 组织费用，不是 ChatGPT Plus/Pro 网页订阅的剩余消息数。后者目前没有稳定公开 API 可供工作台直接查询。
+
+### 4. 启动
 
 ```bash
 npm run docker:up
@@ -61,7 +82,7 @@ npm run docker:up
 http://localhost:3000
 ```
 
-### 4. 停止
+### 5. 停止
 
 ```bash
 npm run docker:down
@@ -199,6 +220,7 @@ npm run dev
 app/
   api/
     ai/route.ts          AI Chat 和指令解析接口
+    usage/route.ts       Kimi 余额和 OpenAI API 费用查询接口
     workbench/route.ts   workbench.json 读写接口
   page.tsx               主界面和交互逻辑
   globals.css            全局样式

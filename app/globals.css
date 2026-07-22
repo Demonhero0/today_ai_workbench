@@ -374,6 +374,99 @@ label {
   color: var(--red);
 }
 
+.usage-page {
+  display: grid;
+  gap: 14px;
+  align-content: start;
+}
+
+.usage-hero {
+  gap: 10px;
+}
+
+.usage-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.usage-card {
+  gap: 14px;
+  min-height: 180px;
+}
+
+.usage-card.ready {
+  border-color: color-mix(in srgb, var(--accent) 42%, var(--line));
+}
+
+.usage-card.error {
+  border-color: rgba(168, 72, 66, 0.38);
+}
+
+.usage-card-head {
+  display: grid;
+  gap: 5px;
+}
+
+.usage-card-head span,
+.usage-message {
+  color: var(--muted);
+}
+
+.usage-card-head strong {
+  font-size: 18px;
+}
+
+.usage-value {
+  margin: 0;
+  font-size: 34px;
+  line-height: 1.08;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.usage-card.missing-key .usage-value {
+  color: var(--muted);
+}
+
+.usage-card.error .usage-value {
+  color: var(--red);
+}
+
+.usage-message {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.usage-history {
+  gap: 12px;
+}
+
+.usage-list {
+  display: grid;
+  gap: 8px;
+}
+
+.usage-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-strong);
+}
+
+.usage-row span {
+  color: var(--muted);
+}
+
+.usage-row strong {
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+
 .suggestions,
 .log-list {
   display: grid;
@@ -1200,6 +1293,7 @@ label {
 
   .today-dashboard,
   .meetings-page,
+  .usage-grid,
   .project-create-panel {
     grid-template-columns: 1fr;
   }
