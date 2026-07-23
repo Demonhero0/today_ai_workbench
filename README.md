@@ -12,7 +12,7 @@
 - 今天视图：AI Chat、未完成任务队列、周/月时间轴。
 - 时间轴拖拽：把 Todo 或会议拖到某一天即可调整日期。
 - AI Chat：支持查询工作台，也支持用自然语言创建项目、创建会议、添加 Todo、更新 Todo 状态。
-- 用量页面：查看 Kimi 余额，以及 OpenAI API 近期开销。
+- 用量页面：查看 Kimi Coding Plan 和 Codex/GPT Coding 订阅窗口用量。
 - 本地数据：工作台数据写入挂载的 `workbench.json`。
 
 ## 快速开始
@@ -52,23 +52,26 @@ OPENAI_MODEL=your-model-name
 
 ### 3. 配置用量页面（可选）
 
-如果想在“用量”页面查看 Kimi 余额，配置：
+如果想在“用量”页面查看 Kimi Coding Plan 用量，配置：
 
 ```bash
-KIMI_API_KEY=your-kimi-api-key
-KIMI_BALANCE_BASE_URL=https://api.moonshot.cn/v1
+KIMI_CODING_API_KEY=your-kimi-coding-api-key
+KIMI_CODING_USAGE_URL=https://api.kimi.com/coding/v1/usages
 ```
 
-如果 `OPENAI_BASE_URL` 已经是 Kimi/Moonshot 地址，用量接口会在没有 `KIMI_API_KEY` 时尝试复用 `OPENAI_API_KEY`。
+如果没有配置 `KIMI_CODING_API_KEY`，工作台会尝试复用 `KIMI_API_KEY`；如果 `OPENAI_BASE_URL` 是 Kimi/Moonshot 地址，也会尝试复用 `OPENAI_API_KEY`。
 
-如果想查看 OpenAI API 近期开销，需要 OpenAI Admin Key：
+如果想查看 Codex / GPT Coding 订阅用量，配置：
 
 ```bash
-OPENAI_ADMIN_KEY=your-openai-admin-key
-OPENAI_USAGE_DAYS=30
+CODEX_ACCESS_TOKEN=your-codex-access-token
 ```
 
-注意：这里查询的是 OpenAI API 组织费用，不是 ChatGPT Plus/Pro 网页订阅的剩余消息数。后者目前没有稳定公开 API 可供工作台直接查询。
+注意：
+
+- 真实 token 只能放在 `.env`，不要提交。
+- 工作台不会读取本机 Codex/Kimi 凭证文件，也不会把 token 写入 `workbench.json`。
+- 这个页面不显示 API 钱包余额或 API 费用，因为它只面向 Coding Plan 订阅用量。
 
 ### 4. 启动
 
@@ -220,7 +223,7 @@ npm run dev
 app/
   api/
     ai/route.ts          AI Chat 和指令解析接口
-    usage/route.ts       Kimi 余额和 OpenAI API 费用查询接口
+    usage/route.ts       Kimi/Codex Coding Plan 用量查询接口
     workbench/route.ts   workbench.json 读写接口
   page.tsx               主界面和交互逻辑
   globals.css            全局样式

@@ -18,21 +18,26 @@ type AiAction =
   | { type: "update_task_status"; title: string; status: TaskStatus };
 type AiPayload = { text?: string; suggestions?: string[]; actions?: AiAction[]; error?: string };
 type UsageProviderStatus = "ready" | "missing-key" | "error";
+type UsageWindow = {
+  key: string;
+  label: string;
+  value: string;
+  utilization?: number | null;
+  resetsAt?: string | null;
+};
 type UsageSnapshot = {
   fetchedAt: string;
   kimi: {
     status: UsageProviderStatus;
     label: string;
     message: string;
-    balance?: string;
+    windows: UsageWindow[];
   };
-  openai: {
+  codex: {
     status: UsageProviderStatus;
     label: string;
     message: string;
-    period?: string;
-    total?: string;
-    buckets?: { date: string; amount: string }[];
+    windows: UsageWindow[];
   };
 };
 
@@ -1179,11 +1184,11 @@ export default function Home() {
             <section className="panel usage-hero">
               <div className="panel-head">
                 <div>
-                  <h2>用量余额</h2>
+                  <h2>订阅用量</h2>
                   <span>
                     {usageData
                       ? `更新于 ${new Date(usageData.fetchedAt).toLocaleString("zh-CN", { hour12: false })}`
-                      : "查看 Kimi 余额和 OpenAI API 近期开销"}
+                      : "查看 Kimi 与 Codex/GPT Coding Plan 订阅用量"}
                   </span>
                 </div>
                 <button className="secondary" type="button" onClick={loadUsage} disabled={usageState === "loading"}>
@@ -1194,37 +1199,28 @@ export default function Home() {
             </section>
 
             <div className="usage-grid">
-              <UsageCard
-                title="Kimi"
+              <UsageProviderCard
+                title="Kimi Coding Plan"
                 status={usageData?.kimi.status ?? "missing-key"}
-                value={usageData?.kimi.balance ?? "未配置"}
-                message={usageData?.kimi.message ?? "配置 KIMI_API_KEY 后可查看 Kimi 账户余额。"}
+                message={usageData?.kimi.message ?? "配置 KIMI_CODING_API_KEY 后可查看 Kimi Coding Plan 用量。"}
+                windows={usageData?.kimi.windows ?? []}
               />
-              <UsageCard
-                title="OpenAI"
-                status={usageData?.openai.status ?? "missing-key"}
-                value={usageData?.openai.total ?? "未配置"}
-                message={usageData?.openai.message ?? "配置 OPENAI_ADMIN_KEY 后可查看 OpenAI API 近期开销。"}
-                eyebrow={usageData?.openai.period}
+              <UsageProviderCard
+                title="Codex / GPT Coding"
+                status={usageData?.codex.status ?? "missing-key"}
+                message={usageData?.codex.message ?? "配置 CODEX_ACCESS_TOKEN 后可查看 Codex / GPT Coding 订阅用量。"}
+                windows={usageData?.codex.windows ?? []}
               />
             </div>
 
             <section className="panel usage-history">
               <div className="panel-head">
-                <h2>OpenAI 最近费用</h2>
-                <span>{usageData?.openai.buckets?.length ? "按天汇总" : "等待可用数据"}</span>
+                <h2>凭证说明</h2>
+                <span>只从 .env 读取</span>
               </div>
-              <div className="usage-list">
-                {usageData?.openai.buckets?.map((bucket) => (
-                  <article className="usage-row" key={bucket.date}>
-                    <span>{bucket.date}</span>
-                    <strong>{bucket.amount}</strong>
-                  </article>
-                ))}
-                {!usageData?.openai.buckets?.length && (
-                  <p className="empty-state">这里会显示 OpenAI API 每日费用。ChatGPT Plus/Pro 网页订阅的剩余消息数目前没有稳定公开接口可查。</p>
-                )}
-              </div>
+              <p className="empty-state">
+                工作台不会读取脚本里的本机凭证路径，也不会把 token 写入代码或数据文件。Kimi 使用 KIMI_CODING_API_KEY；Codex/GPT Coding 使用 CODEX_ACCESS_TOKEN。
+              </p>
             </section>
           </div>
         )}
@@ -1538,27 +1534,43 @@ function Metric({ label, value, hint }: { label: string; value: string; hint: st
   );
 }
 
-function UsageCard({
+function UsageProviderCard({
   title,
   status,
-  value,
   message,
-  eyebrow,
+  windows,
 }: {
   title: string;
   status: UsageProviderStatus;
-  value: string;
   message: string;
-  eyebrow?: string;
+  windows: UsageWindow[];
 }) {
   return (
     <section className={`panel usage-card ${status}`}>
       <div className="usage-card-head">
-        <span>{eyebrow ?? "账户状态"}</span>
+        <span>{status === "ready" ? "已连接" : "等待配置"}</span>
         <strong>{title}</strong>
       </div>
-      <p className="usage-value">{value}</p>
       <p className="usage-message">{message}</p>
+      <div className="usage-window-list">
+        {windows.map((window) => (
+          <article className="usage-window" key={window.key}>
+            <div>
+              <strong>{window.label}</strong>
+              {window.resetsAt && <span>重置：{new Date(window.resetsAt).toLocaleString("zh-CN", { hour12: false })}</span>}
+            </div>
+            <div className="usage-window-value">
+              <b>{window.value}</b>
+              {typeof window.utilization === "number" && (
+                <i>
+                  <em style={{ width: `${Math.max(0, Math.min(100, window.utilization))}%` }} />
+                </i>
+              )}
+            </div>
+          </article>
+        ))}
+        {!windows.length && <p className="empty-state">配置完成后会显示短窗口、周窗口和重置时间。</p>}
+      </div>
     </section>
   );
 }

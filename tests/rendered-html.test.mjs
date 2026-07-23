@@ -112,12 +112,13 @@ test("reads and writes workbench data through the mounted data API", async () =>
   assert.deepEqual(await readResponse.json(), { data });
 });
 
-test("returns friendly usage status without configured provider keys", async () => {
+test("returns friendly coding usage status without configured provider keys", async () => {
   const response = await requestUsage();
   assert.equal(response.status, 200);
   const payload = await response.json();
 
   assert.equal(payload.kimi.status, "missing-key");
-  assert.equal(payload.openai.status, "missing-key");
-  assert.match(payload.openai.message, /OPENAI_ADMIN_KEY/);
+  assert.equal(payload.codex.status, "missing-key");
+  assert.match(payload.kimi.message, /KIMI_CODING_API_KEY/);
+  assert.match(payload.codex.message, /CODEX_ACCESS_TOKEN/);
 });
