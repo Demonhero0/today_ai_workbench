@@ -1,6 +1,9 @@
 const openAiApiKey = process.env.OPENAI_API_KEY;
 const openAiModel = process.env.OPENAI_MODEL ?? "gpt-4.1-mini";
 const openAiBaseUrl = (process.env.OPENAI_BASE_URL ?? "https://api.openai.com/v1").replace(/\/+$/, "");
+const openAiContextLimit = Math.max(3000, Math.min(16000, Number(process.env.OPENAI_CONTEXT_LIMIT ?? 9000) || 9000));
+const openAiMaxTokens = Math.max(128, Math.min(1200, Number(process.env.OPENAI_MAX_TOKENS ?? 520) || 520));
+const openAiTimeoutMs = Math.max(5000, Math.min(120000, Number(process.env.OPENAI_TIMEOUT_MS ?? 45000) || 45000));
 
 type ChatMessage = {
   role: "user" | "assistant";
@@ -92,6 +95,12 @@ function getShanghaiNow() {
   };
 }
 
+function maxTokensForMode(mode: "suggestions" | "chat" | "command") {
+  if (mode === "suggestions") return Math.min(openAiMaxTokens, 260);
+  if (mode === "command") return Math.min(openAiMaxTokens, 520);
+  return openAiMaxTokens;
+}
+
 export async function POST(request: Request) {
   if (!openAiApiKey) {
     return Response.json({ error: "未配置 OPENAI_API_KEY。请在 Docker 环境变量里设置后重启工作台。" }, { status: 503 });
@@ -105,8 +114,8 @@ export async function POST(request: Request) {
       data?: unknown;
     };
     const mode = payload.mode ?? "chat";
-    const workbenchData = JSON.stringify(payload.data ?? {}, null, 2).slice(0, 24000);
-    const recentMessages = (payload.messages ?? []).slice(-8);
+    const workbenchData = JSON.stringify(payload.data ?? {}, null, 2).slice(0, openAiContextLimit);
+    const recentMessages = (payload.messages ?? []).slice(-4);
     const now = getShanghaiNow();
 
     const instructions =
@@ -172,7 +181,9 @@ export async function POST(request: Request) {
         model: openAiModel,
         messages,
         temperature: 1,
+        max_tokens: maxTokensForMode(mode),
       }),
+      signal: AbortSignal.timeout(openAiTimeoutMs),
     });
 
     const responsePayload = await response.json();
@@ -194,7 +205,8 @@ export async function POST(request: Request) {
     }
 
     return Response.json({ text: text || "我没有拿到可用回复。" });
-  } catch {
-    return Response.json({ error: "LLM 请求处理失败" }, { status: 500 });
+  } catch (error) {
+    const message = error instanceof DOMException && error.name === "TimeoutError" ? "LLM 请求超时，请稍后重试或换用更快的模型。" : "LLM 请求处理失败";
+    return Response.json({ error: message }, { status: 500 });
   }
 }

@@ -38,6 +38,9 @@ cp .env.example .env
 OPENAI_API_KEY=your-bailian-coding-plan-key
 OPENAI_BASE_URL=https://coding.dashscope.aliyuncs.com/v1
 OPENAI_MODEL=qwen3-coder-plus
+OPENAI_CONTEXT_LIMIT=9000
+OPENAI_MAX_TOKENS=520
+OPENAI_TIMEOUT_MS=45000
 ```
 
 注意：百炼 Coding Plan 使用专属 Coding endpoint 和专属 key。不要把 Coding Plan 的 `sk-sp-...` key 配到普通百炼 OpenAI 兼容地址，否则通常会认证失败。
@@ -59,6 +62,12 @@ OPENAI_MODEL=your-model-name
 ```
 
 `.env` 已被 Git 忽略，不要提交真实 key。
+
+AI Chat 速度主要受模型和上下文大小影响。觉得慢时可以优先：
+
+- 换用更快的模型。
+- 降低 `OPENAI_CONTEXT_LIMIT`，例如 `6000`。
+- 降低 `OPENAI_MAX_TOKENS`，例如 `320`。
 
 ### 3. 配置用量页面（可选）
 
