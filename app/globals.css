@@ -479,10 +479,6 @@ label {
   font-size: 18px;
 }
 
-.usage-window-value span {
-  text-align: right;
-}
-
 .usage-window-value i {
   display: block;
   width: 118px;

@@ -32,6 +32,16 @@ cd today_ai_workbench
 cp .env.example .env
 ```
 
+如果使用阿里云百炼 Coding Plan，`.env` 类似这样：
+
+```bash
+OPENAI_API_KEY=your-bailian-coding-plan-key
+OPENAI_BASE_URL=https://coding.dashscope.aliyuncs.com/v1
+OPENAI_MODEL=qwen3-coder-plus
+```
+
+注意：百炼 Coding Plan 使用专属 Coding endpoint 和专属 key。不要把 Coding Plan 的 `sk-sp-...` key 配到普通百炼 OpenAI 兼容地址，否则通常会认证失败。
+
 如果使用 Kimi，`.env` 类似这样：
 
 ```bash
