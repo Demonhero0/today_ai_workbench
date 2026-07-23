@@ -4,6 +4,8 @@ type UsageWindow = {
   key: string;
   label: string;
   value: string;
+  remaining?: string | null;
+  limit?: string | null;
   utilization?: number | null;
   resetsAt?: string | null;
 };
@@ -55,6 +57,11 @@ function percentValue(value: unknown) {
   return null;
 }
 
+function compactNumber(value: number) {
+  if (Number.isInteger(value)) return String(value);
+  return value.toFixed(2).replace(/\.?0+$/, "");
+}
+
 function usageFromDetail(key: string, label: string, detail: unknown): UsageWindow | null {
   if (!detail || typeof detail !== "object") return null;
   const record = detail as Record<string, unknown>;
@@ -67,6 +74,8 @@ function usageFromDetail(key: string, label: string, detail: unknown): UsageWind
     label,
     utilization,
     value: limit > 0 && utilization !== null ? `${utilization.toFixed(1)}%` : `${used}/${limit}`,
+    remaining: compactNumber(Math.max(0, limit - used)),
+    limit: compactNumber(limit),
     resetsAt: typeof record.resetTime === "string" ? record.resetTime : null,
   };
 }

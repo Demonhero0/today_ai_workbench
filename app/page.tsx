@@ -22,6 +22,8 @@ type UsageWindow = {
   key: string;
   label: string;
   value: string;
+  remaining?: string | null;
+  limit?: string | null;
   utilization?: number | null;
   resetsAt?: string | null;
 };
@@ -1561,6 +1563,7 @@ function UsageProviderCard({
             </div>
             <div className="usage-window-value">
               <b>{window.value}</b>
+              {window.remaining && <span>剩余 {window.remaining}{window.limit ? ` / ${window.limit}` : ""}</span>}
               {typeof window.utilization === "number" && (
                 <i>
                   <em style={{ width: `${Math.max(0, Math.min(100, window.utilization))}%` }} />
