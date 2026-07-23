@@ -65,16 +65,18 @@ function compactNumber(value: number) {
 function usageFromDetail(key: string, label: string, detail: unknown): UsageWindow | null {
   if (!detail || typeof detail !== "object") return null;
   const record = detail as Record<string, unknown>;
-  const used = percentValue(record.used);
   const limit = percentValue(record.limit);
+  const remaining = percentValue(record.remaining);
+  const used = percentValue(record.used) ?? (limit !== null && remaining !== null ? Math.max(0, limit - remaining) : null);
   if (used === null || limit === null) return null;
+  const remainingValue = remaining ?? Math.max(0, limit - used);
   const utilization = limit > 0 ? (used / limit) * 100 : null;
   return {
     key,
     label,
     utilization,
     value: limit > 0 && utilization !== null ? `${utilization.toFixed(1)}%` : `${used}/${limit}`,
-    remaining: compactNumber(Math.max(0, limit - used)),
+    remaining: compactNumber(remainingValue),
     limit: compactNumber(limit),
     resetsAt: typeof record.resetTime === "string" ? record.resetTime : null,
   };
